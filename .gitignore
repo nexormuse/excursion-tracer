@@ -1,0 +1,9 @@
+.venv/
+.env
+data/
+runs/
+logs/
+__pycache__/
+*.parquet
+.DS_Store
+*.egg-info/

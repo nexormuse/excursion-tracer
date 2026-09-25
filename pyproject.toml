@@ -1,0 +1,32 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "excursion-tracer"
+version = "0.1.0"
+description = "수율 이상 원인 설비 역추적 에이전트: 가상 팹 시나리오, 통계 기준선, LLM 에이전트, 평가기"
+requires-python = ">=3.11"
+dependencies = [
+    "numpy",
+    "pandas",
+    "pyarrow",
+    "scipy",
+    "statsmodels",
+    "pydantic>=2",
+    "pyyaml",
+    "python-dotenv",
+    "matplotlib",
+    "tqdm",
+    "google-genai",
+]
+
+[project.optional-dependencies]
+dev = ["pytest"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]

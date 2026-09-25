@@ -1,0 +1,82 @@
+project: excursion-tracer
+seed_base: {dev: 1000, test: 5000}
+
+fab:
+  n_steps: 40
+  areas: {litho: 6, etch: 8, depo: 8, cmp: 4, implant: 4, clean: 6, metro: 4}
+  tools_per_step: {litho: [2, 3], etch: [3, 6], depo: [3, 6], cmp: [2, 4], implant: [2, 3], clean: [3, 5], metro: [2, 3]}
+  chambers_per_tool: {etch: [2, 4], depo: [2, 4], default: [1, 1]}
+  product_specific_recipe_ratio: 0.3
+  products:
+    P1: {base_yield: 0.92, share: 0.6}
+    P2: {base_yield: 0.88, share: 0.4}
+
+flow:
+  release_days: 18
+  lots_per_day: 24
+  wafers_per_lot: 25
+  proc_hours: [0.3, 1.2]
+  queue_mean_hours: 0.6
+  observe_end_day: 21
+  pm_interval_days: [5, 9]
+  chamber_pm_prob: 0.5
+  benign_recipe_changes: [1, 2]
+
+yield_model:
+  lot_sd: 0.015
+  wafer_sd: 0.012
+  benign_offset_sd: 0.004
+  noisy_tool_ratio: 0.05
+  noisy_tool_sd_mult: 2.0
+
+faults:
+  onset_day: [8, 13]
+  effect: {large: 0.12, medium: 0.07, small: 0.04}
+  stickiness: {low: 0.2, high: 0.8}
+  f0b_mix_change: {from_release_day: 10, p2_share: 0.7}
+
+monitor:
+  baseline_test_days: [3, 7]
+  low_yield_quantile: 0.10
+  alarm: {binom_p: 0.001, consecutive_days: 2}
+  warning: {window_days: 3, binom_p: 0.05}
+  pre_window_days: 2
+  max_discard_ratio: 0.3
+
+sets:
+  dev:  {n: 30,  mix: {F0a: 3, F0b: 3, F1: 7, F2: 6, F3: 5, F4: 6}}
+  test: {n: 120, mix: {F0a: 12, F0b: 12, F1: 24, F2: 18, F3: 18, F4: 18, F5: 18}}
+
+stats:
+  stratify_by_product: true
+  fdr_method: fdr_bh
+  permutation_n: 500
+  no_cause_q: 0.01
+  no_cause_min_effect: 0.01
+  top_k: 10
+
+agent:
+  evidence_max_chars: 6000
+  check_output_max_chars: 1500
+  max_checks: 3
+  max_followup_rounds: 1
+  temperature: 0.0
+  max_tokens: 1200
+  report_language: en          # 쇼케이스 실행은 ko
+  retry_on_invalid: 1
+
+llm:
+  provider: gemini
+  model: gemini-3.5-flash-lite
+  rpm_limit: null              # AI Studio에서 확인한 분당 요청 한도를 적는다 (비어 있으면 실행 거부)
+  rpd_limit: null              # AI Studio에서 확인한 하루 요청 한도를 적는다 (비어 있으면 실행 거부)
+  stop_at_ratio: 0.9           # 한도 창의 90%에서 멈춘다
+  quota_reset_tz: America/Los_Angeles   # 하루 한도는 이 시간대 자정(한국 시간 오후 4시)에 초기화
+  workers: 1
+
+eval:
+  tau: 0.5
+  onset_tolerance_days: 1
+  repeat_runs: 3
+  repeat_sample: 20
+  showcase_n: 3
