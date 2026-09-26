@@ -37,7 +37,9 @@ class GeminiClient:
         self._client = genai.Client(api_key=key)
 
     def list_models(self) -> list[str]:
-        """사용 가능한 모델 이름 목록 (generateContent 지원 모델). 생성 요청이 아니므로 한도에 세지 않는다."""
+        """사용 가능한 모델 이름 목록 (generateContent 지원 모델).
+        생성 요청이 아니므로 한도에는 세지 않고(counted=False) 사용량 기록에만 남긴다."""
+        self.tracker.record(model=self.model, purpose="list_models", counted=False)
         names = []
         for m in self._client.models.list():
             actions = getattr(m, "supported_actions", None) or []

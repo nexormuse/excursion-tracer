@@ -253,3 +253,44 @@ def test_stratified_sample_is_proportional_and_fixed():
     s = stratified_sample(codes, 20, 5000)
     assert s == stratified_sample(codes, 20, 5000)
     assert Counter(codes[x] for x in s) == {"F1": 4, "F2": 3, "F3": 3, "F4": 3, "F5": 3, "F0a": 2, "F0b": 2}
+
+
+def test_check_effect_metric(cfg):
+    from excursion_tracer.eval.metrics import check_effect
+    from excursion_tracer.eval.run_eval import _check_effect
+
+    gt = GT("F1", F1)
+    prelim = R(H(tool="S12-T1"))
+    final = R(H(kind="chamber", chamber="S12-T3-C2"))
+    e = _check_effect({"needs_checks": True, "preliminary_report": json.loads(prelim.model_dump_json())},
+                      final, gt, cfg)
+    assert e == {"checks_requested": True, "top_changed": True,
+                 "prelim_hit3_strict": False, "prelim_false_alarm": None}
+    none = _check_effect({"needs_checks": False, "preliminary_report": None}, final, gt, cfg)
+    assert none["checks_requested"] is False and none["top_changed"] is None
+    rows = [{"fault_code": "F1", **score(final, gt, 0.5), **e},
+            {"fault_code": "F1", **score(final, gt, 0.5), **none}]
+    ce = check_effect(pd.DataFrame(rows))
+    assert (ce["requested"]["k"], ce["requested"]["n"]) == (1, 2)
+    assert ce["changed_hit3_strict_prelim"]["k"] == 0 and ce["changed_hit3_strict_final"]["k"] == 1
+
+
+def test_evaluate_replaces_set_and_keeps_repeatability(cfg, fixture_set, tmp_path):
+    from excursion_tracer.eval.run_eval import evaluate_repeatability
+
+    data_root = tmp_path / "data"
+    (data_root / "dev").mkdir(parents=True)
+    rep_dir = tmp_path / "reps"
+    rep_dir.mkdir()
+    for d in fixture_set.dirs()[:4]:
+        (data_root / "dev" / d.name).symlink_to(d)
+        (rep_dir / f"{d.name}.json").write_text(
+            R(verdict="no_equipment_cause").model_copy(update={"scenario_id": d.name}).model_dump_json())
+    res = tmp_path / "results"
+    evaluate(cfg, "dev", data_root, {"old": rep_dir, "agent": rep_dir}, res, chance_draws=10)
+    evaluate_repeatability("dev", "agent", [rep_dir, rep_dir], [d.name for d in fixture_set.dirs()[:4]], res)
+    out = evaluate(cfg, "dev", data_root, {"agent": rep_dir, "baseline": rep_dir}, res, chance_draws=10)["dev"]
+    assert "old" not in out and "repeatability" in out["agent"]
+    assert "mcnemar_p" in out["compare"]
+    per = pd.read_csv(res / "per_scenario.csv")
+    assert set(per["method"]) == {"agent", "baseline"}

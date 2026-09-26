@@ -4,6 +4,7 @@
 
 실패 = 원인 시나리오에서 Hit@3 엄격 실패, 원인 없는 시나리오에서 오경보.
 선정: 유형별 실패 비율이 높은 순(동률은 실패 수, 유형 이름 순)으로 5개 유형, 유형마다 번호가 가장 작은 실패 시나리오.
+손으로 쓴 요약은 <!-- manual:start --> 와 <!-- manual:end --> 사이에 두면 다시 실행해도 남는다.
 각 사례에 넣는 사실: 정답, 에이전트의 가설과 인용 근거 줄 원문, 정답 요인이 근거 묶음에 나온 줄,
 전체 공통성 스캔에서 정답 요인의 순위, 추가 확인 요청 여부.
 """
@@ -23,6 +24,7 @@ from excursion_tracer.stats.commonality import scan_all
 from excursion_tracer.stats.data import load_scenario
 
 N_CASES = 5
+MANUAL_START, MANUAL_END = "<!-- manual:start -->", "<!-- manual:end -->"
 
 
 def _is_fail(r) -> bool:
@@ -124,6 +126,11 @@ def main(argv=None) -> int:
     for code, r in fail.iterrows():
         parts.append(f"| {code} | {int(r['sum'])} | {int(r['size'])} |")
     parts.append("")
+    if args.out.is_file():
+        old = args.out.read_text(encoding="utf-8")
+        m = re.search(rf"{re.escape(MANUAL_START)}.*?{re.escape(MANUAL_END)}", old, flags=re.S)
+        if m:
+            parts += [m.group(0), ""]
     for sid in chosen:
         parts.append(case_md(cfg, sid, args.data / args.set, args.run, rows.loc[sid]))
     args.out.write_text("\n".join(parts), encoding="utf-8")

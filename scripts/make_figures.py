@@ -43,7 +43,8 @@ def main(argv=None) -> int:
         F.fig2_difficulty(per, args.set, fig_dir / "fig2_difficulty.png"),
         F.fig3_by_fault(summary, args.set, fig_dir / "fig3_by_fault.png"),
         F.fig4_calibration(summary, args.set, fig_dir / "fig4_calibration.png"),
-        F.fig5_repeatability(summary, args.set, fig_dir / "fig5_repeatability.png"),
+        (F.fig5_repeatability(summary, args.set, fig_dir / "fig5_repeatability.png")
+         if "repeatability" in summary[args.set].get("agent", {}) else "fig5: 반복성 결과 없음, 건너뜀"),
         F.fig6_case_timeline(args.data / args.set / sel["selection"]["success"],
                              run_dir / f"{sel['selection']['success']}.json", per_set,
                              fig_dir / "fig6_case_timeline.png"),

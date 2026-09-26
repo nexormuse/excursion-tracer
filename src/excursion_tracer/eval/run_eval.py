@@ -15,7 +15,7 @@ import pandas as pd
 from pydantic import ValidationError
 
 from excursion_tracer.agent.schema import Report
-from excursion_tracer.config import Config
+from excursion_tracer.config import PROJECT_ROOT, Config
 from excursion_tracer.eval.compare import mcnemar_paired
 from excursion_tracer.eval.ground_truth import load_ground_truth
 from excursion_tracer.eval.match import score
@@ -24,6 +24,7 @@ from excursion_tracer.eval.metrics import (
 )
 
 RUN_INFO = "run_info.json"
+USAGE_LOG = PROJECT_ROOT / "logs" / "usage.jsonl"
 
 
 def load_report(path: Path) -> tuple[Report | None, dict]:
@@ -37,7 +38,8 @@ def load_report(path: Path) -> tuple[Report | None, dict]:
     extra = {}
     if isinstance(raw, dict) and "final_report" in raw:
         extra = {k: raw.get(k) for k in ("requests", "input_tokens", "output_tokens",
-                                         "seconds", "numcheck_bad") if k in raw}
+                                         "seconds", "numcheck_bad", "needs_checks",
+                                         "preliminary_report", "model", "prompt_hash") if k in raw}
         if raw.get("invalid") or raw["final_report"] is None:
             return None, extra
         raw = raw["final_report"]
@@ -52,6 +54,36 @@ def scenario_dirs(data_root: Path, set_name: str) -> list[Path]:
     return sorted(p for p in base.iterdir() if (p / "meta.json").is_file())
 
 
+def _top_key(rep: Report | None) -> tuple:
+    if rep is None:
+        return ("invalid",)
+    if rep.verdict == "no_equipment_cause" or not rep.hypotheses:
+        return (rep.verdict,)
+    h = min(rep.hypotheses, key=lambda x: x.rank)
+    return (rep.verdict, h.entity_type, h.step_id, h.tool_id, h.chamber_id, h.recipe_id)
+
+
+def _check_effect(extra: dict, final: Report | None, gt: dict, cfg: Config) -> dict:
+    """추가 확인을 요청했는지, 1회차 잠정 보고서와 최종 보고서의 1순위가 다른지, 잠정 보고서의 채점."""
+    out = {"checks_requested": None, "top_changed": None,
+           "prelim_hit3_strict": None, "prelim_false_alarm": None}
+    if "needs_checks" not in extra:
+        return out
+    out["checks_requested"] = bool(extra["needs_checks"])
+    raw = extra.get("preliminary_report")
+    if not out["checks_requested"] or raw is None:
+        return out
+    try:
+        prelim = Report.model_validate(raw)
+    except ValidationError:
+        return out
+    out["top_changed"] = _top_key(prelim) != _top_key(final)
+    ps = score(prelim, gt, cfg.eval.tau, cfg.eval.onset_tolerance_days)
+    out["prelim_hit3_strict"] = ps["hit3_strict"]
+    out["prelim_false_alarm"] = ps["false_alarm"]
+    return out
+
+
 def score_method(cfg: Config, dirs: list[Path], gts: dict, report_dir: Path, method: str,
                  set_name: str) -> pd.DataFrame:
     info_path = report_dir / RUN_INFO
@@ -63,6 +95,7 @@ def score_method(cfg: Config, dirs: list[Path], gts: dict, report_dir: Path, met
         rep, extra = load_report(report_dir / f"{d.name}.json")
         alert = json.loads((d / "alert.json").read_text(encoding="utf-8"))
         s = score(rep, gt, cfg.eval.tau, cfg.eval.onset_tolerance_days)
+        s.update(_check_effect(extra, rep, gt, cfg))
         rows.append({
             "set": set_name, "method": method, "scenario_id": d.name,
             "fault_code": gt["fault_code"], "effect": gt["cell"]["effect"],
@@ -70,13 +103,31 @@ def score_method(cfg: Config, dirs: list[Path], gts: dict, report_dir: Path, met
             "regen_count": gt["regen_count"],
             **s,
             "seconds": extra.get("seconds", seconds.get(d.name)),
-            **{k: extra.get(k) for k in ("requests", "input_tokens", "output_tokens", "numcheck_bad")},
+            **{k: extra.get(k) for k in ("requests", "input_tokens", "output_tokens", "numcheck_bad",
+                                         "model", "prompt_hash")},
         })
     return pd.DataFrame(rows)
 
 
+def usage_cost(run_dir: Path, scenario_ids: set[str], log_path: Path = USAGE_LOG) -> dict | None:
+    """사용량 기록에서 이 실행(run_id = 폴더 이름)·이 세트 시나리오의 요청 수와 비용 합계."""
+    if not log_path.is_file():
+        return None
+    n, cost = 0, 0.0
+    for line in log_path.read_text(encoding="utf-8").splitlines():
+        if not line.strip():
+            continue
+        rec = json.loads(line)
+        if rec.get("run_id") == run_dir.name and rec.get("scenario_id") in scenario_ids:
+            n += 1
+            cost += float(rec.get("cost_usd", 0.0))
+    return {"logged_requests": n, "cost_usd_total": cost} if n else None
+
+
 def evaluate(cfg: Config, set_name: str, data_root: Path, methods: dict[str, Path],
              results_dir: Path, chance_draws: int = 2000) -> dict:
+    """세트 하나를 채점한다. 이 세트의 이전 결과는 이번에 준 방법들로 통째로 바꾸고,
+    같은 이름의 방법에 붙어 있던 반복성 결과만 옮겨 둔다."""
     dirs = scenario_dirs(data_root, set_name)
     gts = {d.name: load_ground_truth(d) for d in dirs}
     frames = {m: score_method(cfg, dirs, gts, p, m, set_name) for m, p in methods.items()}
@@ -90,6 +141,13 @@ def evaluate(cfg: Config, set_name: str, data_root: Path, methods: dict[str, Pat
         entry["by_effect"] = breakdown(df[df["effect"].notna()], "effect")
         entry["by_stickiness"] = breakdown(df, "stickiness")
         entry["by_alert_level"] = breakdown(df, "alert_level")
+        for col in ("model", "prompt_hash"):
+            vals = sorted({v for v in df[col].dropna()}) if col in df else []
+            if vals:
+                entry[col] = vals[0] if len(vals) == 1 else vals
+        cost = usage_cost(methods[m], {d.name for d in dirs})
+        if cost:
+            entry["usage"] = cost
         set_summary[m] = entry
     set_summary["chance"] = chance_level(dirs, gts, n_draws=chance_draws)
     names = list(frames)
@@ -101,6 +159,9 @@ def evaluate(cfg: Config, set_name: str, data_root: Path, methods: dict[str, Pat
             cause = ~fa["fault_code"].isin(["F0a", "F0b"])
             compare[f"{a}_vs_{b}"] = {"hit3_strict_mcnemar": mcnemar_paired(
                 fa.loc[cause, "hit3_strict"], fb.loc[cause, "hit3_strict"])}
+    for key in ("baseline_vs_agent", "agent_vs_baseline"):
+        if key in compare:
+            compare["mcnemar_p"] = compare[key]["hit3_strict_mcnemar"]["p"]
     set_summary["compare"] = compare
     regen = [g["regen_count"] for g in gts.values()]
     set_summary["info"] = {
@@ -120,15 +181,17 @@ def evaluate(cfg: Config, set_name: str, data_root: Path, methods: dict[str, Pat
     csv = results_dir / "per_scenario.csv"
     if csv.is_file():
         old = pd.read_csv(csv)
-        old = old[~((old["set"] == set_name) & old["method"].isin(names))]
+        old = old[old["set"] != set_name]
         per = pd.concat([old, per], ignore_index=True)
     per.to_csv(csv, index=False)
 
     sj = results_dir / "summary.json"
     summary = json.loads(sj.read_text(encoding="utf-8")) if sj.is_file() else {}
-    summary.setdefault(set_name, {})
-    for k, v in set_summary.items():
-        summary[set_name][k] = v
+    previous = summary.get(set_name, {})
+    for m in names:
+        if "repeatability" in previous.get(m, {}):
+            set_summary[m]["repeatability"] = previous[m]["repeatability"]
+    summary[set_name] = set_summary
     sj.write_text(json.dumps(_clean(summary), ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     return summary
 

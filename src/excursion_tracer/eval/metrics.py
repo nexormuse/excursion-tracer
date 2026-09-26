@@ -68,10 +68,28 @@ def core_metrics(df: pd.DataFrame) -> dict:
     if "seconds" in df and df["seconds"].notna().any():
         s = df["seconds"].dropna()
         out["seconds_per_scenario"] = {"mean": float(s.mean()), "max": float(s.max()), "n": int(len(s))}
+    if "checks_requested" in df and df["checks_requested"].notna().any():
+        out["check_effect"] = check_effect(df)
     for col in ("requests", "input_tokens", "output_tokens"):
         if col in df and df[col].notna().any():
             out[f"{col}_per_scenario"] = {"mean": float(df[col].dropna().mean())}
     return out
+
+
+def check_effect(df: pd.DataFrame) -> dict:
+    """추가 확인 효과: 요청 비율, 그중 1순위가 바뀐 비율, 바뀐 경우 잠정 → 최종 적중(원인 시나리오)과
+    오경보(원인 없는 시나리오)."""
+    req = df[df["checks_requested"].astype("boolean").fillna(False)]
+    changed = req[req["top_changed"].astype("boolean").fillna(False)]
+    cause = ~changed["fault_code"].isin(NO_CAUSE_CODES)
+    return {
+        "requested": rate(df["checks_requested"]),
+        "top_changed_given_requested": rate(req["top_changed"]),
+        "changed_hit3_strict_prelim": rate(changed.loc[cause, "prelim_hit3_strict"]),
+        "changed_hit3_strict_final": rate(changed.loc[cause, "hit3_strict"]),
+        "changed_false_alarm_prelim": rate(changed.loc[~cause, "prelim_false_alarm"]),
+        "changed_false_alarm_final": rate(changed.loc[~cause, "false_alarm"]),
+    }
 
 
 def calibration(df: pd.DataFrame) -> list[dict]:

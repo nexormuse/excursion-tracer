@@ -137,7 +137,7 @@ python scripts/make_figures.py --set test
 python scripts/make_readme_results.py
 ```
 
-`<run_id>`는 `날짜-모델-프롬프트해시8자리`이고 `run_agent.py`가 출력한다. 시나리오 생성, 통계 기준선, 평가, 그림은 모두 로컬 계산이다. seed가 같으면 같은 시나리오 파일이 나오지만, LLM 응답은 temperature 0에서도 실행마다 다를 수 있다(반복성 지표 참고).
+`<run_id>`는 `날짜-모델-프롬프트해시8자리`이고 `run_agent.py`가 출력한다. 시나리오 생성, 통계 기준선, 평가, 그림은 모두 로컬 계산이다. seed가 같으면 같은 시나리오 파일이 나오지만(meta.json의 생성 시각만 다르다), LLM 응답은 temperature 0에서도 실행마다 다를 수 있다(반복성 지표 참고).
 
 ## 한계
 

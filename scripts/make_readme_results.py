@@ -32,7 +32,9 @@ def r(x: dict | None) -> str:
 def block(s: dict) -> str:
     t = s["test"]
     a, b, ch, info = t["agent"], t["baseline"], t["chance"], t["info"]
-    mc = t["compare"]["baseline_vs_agent"]["hit3_strict_mcnemar"]
+    key = "baseline_vs_agent" if "baseline_vs_agent" in t["compare"] else "agent_vs_baseline"
+    mc = t["compare"][key]["hit3_strict_mcnemar"]
+    first, second = ("기준선", "에이전트") if key == "baseline_vs_agent" else ("에이전트", "기준선")
     mix = ", ".join(f"{k} {v}" for k, v in info["fault_mix"].items())
     L = [f"test 세트 {info['n_scenarios']}개 ({mix}). 원인 시나리오 {a['n_cause']}개, "
          f"원인 없는 시나리오 {a['n_no_cause']}개. 비율 옆 괄호는 95% Wilson 신뢰구간이다.", "",
@@ -54,8 +56,8 @@ def block(s: dict) -> str:
              f"{b['seconds_per_scenario']['mean']:.2f} |")
     L += ["", f"- 우연 수준 (정답과 같은 수준의 후보에서 무작위 3개): Hit@3 엄격 {ch['hit3_strict']:.4f}, "
               f"느슨 {ch['hit3_loose']:.4f}",
-          f"- McNemar (Hit@3 엄격, 같은 원인 시나리오 {mc['n']}쌍): 둘 다 적중 {mc['both']}, 기준선만 {mc['only_a']}, "
-          f"에이전트만 {mc['only_b']}, 둘 다 실패 {mc['neither']}, p = {mc['p']:.3f}",
+          f"- McNemar (Hit@3 엄격, 같은 원인 시나리오 {mc['n']}쌍): 둘 다 적중 {mc['both']}, {first}만 {mc['only_a']}, "
+          f"{second}만 {mc['only_b']}, 둘 다 실패 {mc['neither']}, p = {mc['p']:.3f}",
           f"- 알림이 없어 다시 만든 시나리오 수: {info['regen_total']}", "",
           "원인 유형별 Hit@3 (엄격) / 오경보율", "",
           "| 유형 | 내용 | LLM 에이전트 | 통계 기준선 |", "|---|---|---|---|"]
