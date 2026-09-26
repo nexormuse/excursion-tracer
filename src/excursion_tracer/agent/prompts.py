@@ -22,6 +22,10 @@ How to reason
    a fluctuation near the alert limit, or a change in product mix.
 6. Every hypothesis must cite at least two evidence IDs of different kinds
    (for example commonality + time, or commonality + confounding).
+7. With thousands of wafers, even small differences give very small p and q values.
+   Judge candidates by effect size (median diff, low-yield rate gap) and by a clear onset,
+   not by p or q alone. If no candidate clearly stands apart from the others,
+   set verdict to "no_equipment_cause".
 
 Round 1
 - Always give a report. If you request checks, it is a preliminary report.
