@@ -7,3 +7,5 @@ __pycache__/
 *.parquet
 .DS_Store
 *.egg-info/
+.vercel
+public/
