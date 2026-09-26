@@ -73,3 +73,11 @@ def generated_dev_dirs() -> list[Path]:
     if not base.is_dir():
         return []
     return sorted(p for p in base.iterdir() if (p / "meta.json").is_file())
+
+
+def generated_test_dirs() -> list[Path]:
+    """data/test 에 생성해 둔 시나리오 폴더 (없으면 빈 목록)."""
+    base = PROJECT_ROOT / "data" / "test"
+    if not base.is_dir():
+        return []
+    return sorted(p for p in base.iterdir() if (p / "meta.json").is_file())

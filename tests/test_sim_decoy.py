@@ -14,10 +14,9 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from excursion_tracer.config import PROJECT_ROOT
 from excursion_tracer.eval.ground_truth import load_ground_truth
 
-from .conftest import generated_dev_dirs
+from .conftest import generated_dev_dirs, generated_test_dirs
 
 DECOY_LIMIT = 0.01
 
@@ -66,13 +65,6 @@ def test_no_cause_tool_differences_recorded_for_fixture(fixture_set, record_prop
         assert len(diffs) > 0
         record_property(d.name, {"median": round(float(diffs.median()), 4),
                                  "max": round(float(diffs.max()), 4)})
-
-
-def generated_test_dirs() -> list[Path]:
-    base = PROJECT_ROOT / "data" / "test"
-    if not base.is_dir():
-        return []
-    return sorted(p for p in base.iterdir() if (p / "meta.json").is_file())
 
 
 @pytest.mark.skipif(not generated_dev_dirs(), reason="data/dev 가 아직 없다")
