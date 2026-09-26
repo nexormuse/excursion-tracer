@@ -68,8 +68,8 @@ agent:
 llm:
   provider: gemini
   model: gemini-3.5-flash-lite
-  rpm_limit: null              # AI Studio에서 확인한 분당 요청 한도를 적는다 (비어 있으면 실행 거부)
-  rpd_limit: null              # AI Studio에서 확인한 하루 요청 한도를 적는다 (비어 있으면 실행 거부)
+  rpm_limit: 15                # 잠정값 — 공식 문서 미게시. AI Studio에서 확인해 확정 (§5.3.3)
+  rpd_limit: 500               # 잠정값 — 공식 문서 미게시. AI Studio에서 확인해 확정 (§5.3.3)
   stop_at_ratio: 0.9           # 한도 창의 90%에서 멈춘다
   quota_reset_tz: America/Los_Angeles   # 하루 한도는 이 시간대 자정(한국 시간 오후 4시)에 초기화
   workers: 1
