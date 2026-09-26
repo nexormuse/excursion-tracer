@@ -51,6 +51,9 @@ def block(s: dict) -> str:
     rep = a.get("repeatability")
     if rep:
         L.append(f"| 반복성 ({rep['n']}개 × {rep['runs_per_scenario']}회, 판정·1순위 일치) | {r(rep)} | - |")
+    ce = a.get("check_effect")
+    if ce:
+        L.append(f"| 추가 확인을 요청한 시나리오 비율 | {r(ce['requested'])} | - |")
     L.append(f"| 시나리오당 LLM 요청 수 (평균) | {a['requests_per_scenario']['mean']:.2f} | 0 |")
     L.append(f"| 시나리오당 처리 시간 (평균, 초) | {a['seconds_per_scenario']['mean']:.2f} | "
              f"{b['seconds_per_scenario']['mean']:.2f} |")
