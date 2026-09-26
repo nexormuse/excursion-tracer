@@ -26,6 +26,8 @@ def main(argv=None) -> int:
                     help="이름=보고서 폴더 (여러 번 줄 수 있다)")
     ap.add_argument("--data", type=Path, default=PROJECT_ROOT / "data")
     ap.add_argument("--results", type=Path, default=PROJECT_ROOT / "results")
+    ap.add_argument("--repeat", default=None,
+                    help="반복성: 방법이름=기본폴더,추가폴더1,추가폴더2 (표본은 results/repeat_sample.json)")
     args = ap.parse_args(argv)
 
     methods = {}
@@ -49,6 +51,16 @@ def main(argv=None) -> int:
                 print(f"  {code:<5}{e['n']:>3}  {_fmt(e['hit3_strict']):<28}{_fmt(e['hit3_loose']):<28}")
             else:
                 print(f"  {code:<5}{e['n']:>3}  {'-':<28}{'-':<28}{_fmt(e['false_alarm'])}")
+    if args.repeat:
+        import json
+
+        from excursion_tracer.eval.run_eval import evaluate_repeatability
+
+        name, _, paths = args.repeat.partition("=")
+        sample = json.loads((args.results / "repeat_sample.json").read_text())["scenarios"]
+        r = evaluate_repeatability(args.set, name, [Path(p) for p in paths.split(",")], sample,
+                                   args.results)
+        print(f"\n반복성 [{name}]: {_fmt(r)} (실행 {r['runs_per_scenario']}회, 누락 {r['missing']})")
     ch = summary["chance"]
     print(f"\n우연 수준 Hit@3: 엄격 {ch['hit3_strict']:.4f}, 느슨 {ch['hit3_loose']:.4f} "
           f"(원인 시나리오 {ch['n_cause']}개, 추첨 {ch['n_draws']}회)")

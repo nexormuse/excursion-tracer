@@ -19,7 +19,9 @@ from excursion_tracer.config import Config
 from excursion_tracer.eval.compare import mcnemar_paired
 from excursion_tracer.eval.ground_truth import load_ground_truth
 from excursion_tracer.eval.match import score
-from excursion_tracer.eval.metrics import breakdown, calibration, chance_level, core_metrics
+from excursion_tracer.eval.metrics import (
+    breakdown, calibration, chance_level, core_metrics, repeatability,
+)
 
 RUN_INFO = "run_info.json"
 
@@ -143,3 +145,19 @@ def _clean(obj):
     if isinstance(obj, np.bool_):
         return bool(obj)
     return obj
+
+
+def evaluate_repeatability(set_name: str, method: str, run_dirs: list[Path], scenario_ids: list[str],
+                           results_dir: Path) -> dict:
+    """같은 시나리오를 여러 번 실행한 기록으로 반복성(판정과 1순위 가설이 모두 같은 비율)을 낸다."""
+    runs = {sid: [load_report(d / f"{sid}.json")[0] for d in run_dirs] for sid in scenario_ids}
+    missing = [sid for sid in scenario_ids
+               if any(not (d / f"{sid}.json").is_file() for d in run_dirs)]
+    res = repeatability({k: v for k, v in runs.items() if k not in missing})
+    res.update({"runs_per_scenario": len(run_dirs), "run_dirs": [str(d) for d in run_dirs],
+                "scenarios": scenario_ids, "missing": missing})
+    sj = results_dir / "summary.json"
+    summary = json.loads(sj.read_text(encoding="utf-8")) if sj.is_file() else {}
+    summary.setdefault(set_name, {}).setdefault(method, {})["repeatability"] = res
+    sj.write_text(json.dumps(_clean(summary), ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    return res

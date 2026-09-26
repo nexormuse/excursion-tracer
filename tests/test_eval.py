@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
 
 import pandas as pd
 import pytest
@@ -220,3 +221,35 @@ def test_evaluate_end_to_end(cfg, fixture_set, tmp_path):
     per = pd.read_csv(tmp_path / "results" / "per_scenario.csv")
     assert len(per) == 2 * len(fixture_set.dirs())
     assert 0 < out["chance"]["hit3_strict"] < 0.2
+
+
+def test_evaluate_repeatability(tmp_path):
+    from excursion_tracer.eval.run_eval import evaluate_repeatability
+
+    dirs = [tmp_path / f"r{i}" for i in range(3)]
+    for d in dirs:
+        d.mkdir()
+    same = R(H(tool="S12-T3"))
+    for d in dirs:
+        (d / "scn_a.json").write_text(same.model_dump_json())
+    (dirs[0] / "scn_b.json").write_text(R(H(tool="S12-T1")).model_dump_json())
+    (dirs[1] / "scn_b.json").write_text(R(H(tool="S12-T2")).model_dump_json())
+    (dirs[2] / "scn_b.json").write_text(R(H(tool="S12-T1")).model_dump_json())
+    res = evaluate_repeatability("test", "agent", dirs, ["scn_a", "scn_b", "scn_c"], tmp_path)
+    assert (res["k"], res["n"]) == (1, 2) and res["missing"] == ["scn_c"]
+    saved = json.loads((tmp_path / "summary.json").read_text())
+    assert saved["test"]["agent"]["repeatability"]["k"] == 1
+
+
+def test_stratified_sample_is_proportional_and_fixed():
+    import sys
+    from collections import Counter
+
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
+    from run_extra import stratified_sample
+
+    kinds = ["F0a"] * 12 + ["F0b"] * 12 + ["F1"] * 24 + ["F2"] * 18 + ["F3"] * 18 + ["F4"] * 18 + ["F5"] * 18
+    codes = {f"scn_{5001 + i}": c for i, c in enumerate(kinds)}
+    s = stratified_sample(codes, 20, 5000)
+    assert s == stratified_sample(codes, 20, 5000)
+    assert Counter(codes[x] for x in s) == {"F1": 4, "F2": 3, "F3": 3, "F4": 3, "F5": 3, "F0a": 2, "F0b": 2}

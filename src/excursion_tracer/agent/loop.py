@@ -141,7 +141,8 @@ def run_scenario(client: LLMClient, cfg: Config, scenario_dir: Path, run_id: str
 
 
 def run_set(client: LLMClient, cfg: Config, scenario_dirs: list[Path], run_id: str,
-            runs_dir: Path = RUNS_DIR, limit: int | None = None, log=print) -> list[dict]:
+            runs_dir: Path = RUNS_DIR, limit: int | None = None, log=print,
+            language: str | None = None) -> list[dict]:
     """이미 기록이 있는 시나리오는 건너뛰고 차례로 실행한다. 한도 초과는 호출자에게 넘긴다."""
     out_dir = runs_dir / run_id
     done = []
@@ -149,7 +150,7 @@ def run_set(client: LLMClient, cfg: Config, scenario_dirs: list[Path], run_id: s
     if limit is not None:
         todo = todo[:limit]
     for d in todo:
-        rec = run_scenario(client, cfg, d, run_id, out_dir)
+        rec = run_scenario(client, cfg, d, run_id, out_dir, language=language)
         done.append(rec)
         fr = rec["final_report"]
         top = ""
