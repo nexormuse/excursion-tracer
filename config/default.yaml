@@ -68,8 +68,8 @@ agent:
 llm:
   provider: gemini
   model: gemini-3.5-flash-lite
-  rpm_limit: 15                # 잠정값 — 공식 문서 미게시. AI Studio에서 확인해 확정 (§5.3.3)
-  rpd_limit: 500               # 잠정값 — 공식 문서 미게시. AI Studio에서 확인해 확정 (§5.3.3)
+  rpm_limit: 15                # AI Studio 확인값 (2026-09-26)
+  rpd_limit: 500               # AI Studio 확인값 (2026-09-26). 태평양 자정(한국 16시)에 초기화
   stop_at_ratio: 0.9           # 한도 창의 90%에서 멈춘다
   quota_reset_tz: America/Los_Angeles   # 하루 한도는 이 시간대 자정(한국 시간 오후 4시)에 초기화
   workers: 1
