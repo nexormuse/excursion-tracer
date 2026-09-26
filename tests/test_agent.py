@@ -220,6 +220,11 @@ def test_extract_numbers_skips_ids_and_dates():
     assert extract_numbers(text) == ["-0.041", "4.470", "21%"]
 
 
+def test_extract_numbers_skips_written_dates():
+    assert extract_numbers("around the onset time of January 14, then Jan 9th and 3 Feb 2026") == []
+    assert extract_numbers("1월 14일 이후 0.041 하락") == ["0.041"]
+
+
 def test_numcheck():
     rep = Report.model_validate(report(hypotheses=[hyp(evidence=[
         {"evidence_id": "E7", "summary": "median diff -0.041, rate 0.39 vs 11%, n 2850"},

@@ -13,7 +13,13 @@ import re
 from excursion_tracer.agent.schema import Report
 
 ID_RE = re.compile(r"\b(?:[A-Za-z]+_\d+|[A-Za-z]{1,3}\d+(?:-[A-Za-z]\d+)*|R\d)\b")
-DATE_RE = re.compile(r"\d{4}-\d{2}-\d{2}(?:[T ]\d{2}:\d{2}(?::\d{2})?)?|\b\d{2}-\d{2}\b|\b\d{1,2}:\d{2}\b")
+MONTHS = r"(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec)[a-z]*\.?"
+DATE_RE = re.compile(
+    r"\d{4}-\d{2}-\d{2}(?:[T ]\d{2}:\d{2}(?::\d{2})?)?|\b\d{2}-\d{2}\b|\b\d{1,2}:\d{2}\b"
+    rf"|\b{MONTHS}\s+\d{{1,2}}(?:st|nd|rd|th)?(?:,?\s+\d{{4}})?\b"
+    rf"|\b\d{{1,2}}(?:st|nd|rd|th)?\s+{MONTHS}(?:\s+\d{{4}})?\b"
+    r"|\d{1,2}월\s*\d{1,2}일"
+)
 NUM_RE = re.compile(r"(?<![\w.])[-+]?(?:\d+\.\d+|\.\d+|\d+)(?:[eE][-+]?\d+)?%?")
 
 
