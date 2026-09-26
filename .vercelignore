@@ -1,0 +1,6 @@
+# 배포에는 공개 페이지와 README, 결과 파일만 올린다
+/*
+!/site
+!/README.md
+!/results
+!/vercel.json
