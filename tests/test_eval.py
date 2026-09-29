@@ -75,14 +75,30 @@ def test_single_fault_ranks():
     assert s["hit3_strict"] and not s["hit1_strict"] and s["hit3_loose"] and not s["hit1_loose"]
 
 
-def test_f4_needs_both_for_strict():
+def test_f4_hit_is_any_fault_and_both_is_separate():
     gt = GT("F4", F1, F3)
     both = score(R(H(1, step="S30", tool="S30-T2"), H(2, kind="chamber", chamber="S12-T3-C2")),
                  gt, tau=0.5)
-    assert both["hit3_strict"] and both["hit1_strict"] and both["rank_strict"] == 2
-    one = score(R(H(1, tool="S12-T3")), gt, tau=0.5)
-    assert not one["hit3_strict"] and one["hit3_loose"] and one["hit1_loose"]
-    assert one["rank_strict"] is None and one["rank_loose"] == 1
+    assert both["hit3_strict"] and both["hit1_strict"] and both["rank_strict"] == 1
+    assert both["both_hit3_strict"] is True
+    one = score(R(H(1, tool="S12-T1"), H(2, kind="chamber", chamber="S12-T3-C2")), gt, tau=0.5)
+    assert one["hit3_strict"] and not one["hit1_strict"] and one["rank_strict"] == 2
+    assert one["both_hit3_strict"] is False
+    loose = score(R(H(1, tool="S12-T3")), gt, tau=0.5)
+    assert not loose["hit3_strict"] and loose["hit3_loose"] and loose["hit1_loose"]
+    assert loose["rank_strict"] is None and loose["rank_loose"] == 1
+
+
+def test_hit1_never_exceeds_hit3():
+    import itertools
+
+    gt = GT("F4", F1, F3)
+    pool = [H(tool="S12-T1"), H(kind="chamber", chamber="S12-T3-C2"), H(step="S30", tool="S30-T2"),
+            H(tool="S12-T3")]
+    for combo in itertools.permutations(pool, 3):
+        hyps = [h.model_copy(update={"rank": i + 1}) for i, h in enumerate(combo)]
+        s = score(R(*hyps), gt, tau=0.5)
+        assert s["hit1_strict"] <= s["hit3_strict"] and s["hit1_loose"] <= s["hit3_loose"]
 
 
 def test_no_cause_verdict_is_miss_for_cause_scenario():

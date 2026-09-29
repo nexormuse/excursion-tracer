@@ -4,10 +4,12 @@
 | F1 | 챔버 일치 | 같은 설비 |
 | F2 | 설비와 레시피 모두 일치 | 설비 일치, 또는 같은 단계에서 레시피 일치 |
 | F3 | 설비 일치 | 같은 단계 |
-| F4 | 두 원인 모두 상위 3개 안에서 엄격 적중 | 하나라도 상위 3개 안에서 느슨한 적중 |
+| F4 | 두 원인 중 하나 이상이 상위 k개 안에서 엄격 적중 | 하나 이상이 상위 k개 안에서 느슨한 적중 |
 | F5 | 레시피 일치 | 같은 단계 |
 | F0a·F0b | no_equipment_cause, 또는 1순위 신뢰도 < τ | 동일 |
 
+F4는 보조 지표로 두 원인 모두 상위 3개 안에서 엄격 적중했는지(both_hit3_strict)를 따로 본다.
+순위(MRR용)는 첫 적중 순위다. 이 정의로 모든 유형에서 Hit@1 ≤ Hit@3이다.
 가설의 설비는 tool_id, 비어 있으면 chamber_id에서 얻는다.
 판정이 no_equipment_cause인 보고서는 원인 시나리오에서 가설이 없는 것으로 본다.
 """
@@ -84,7 +86,7 @@ def score(report: Report | None, gt: dict, tau: float, onset_tol_days: float = 1
         "rank_strict": None, "rank_loose": None,
         "hit1_strict": None, "hit3_strict": None, "hit1_loose": None, "hit3_loose": None,
         "false_alarm": None, "missed": None, "onset_ok": None, "f0b_explained": None,
-        "no_cause_correct": None,
+        "no_cause_correct": None, "both_hit3_strict": None,
     }
     hyps = [] if report is None else sorted(report.hypotheses, key=lambda h: h.rank)
     if hyps:
@@ -108,22 +110,16 @@ def score(report: Report | None, gt: dict, tau: float, onset_tol_days: float = 1
     s_ranks = [_first_rank(top, f, True) for f in faults]
     l_ranks = [_first_rank(top, f, False) for f in faults]
 
-    if len(faults) == 1:
-        out["rank_strict"], out["rank_loose"] = s_ranks[0], l_ranks[0]
-        out["hit3_strict"] = s_ranks[0] is not None
-        out["hit3_loose"] = l_ranks[0] is not None
-        out["hit1_strict"] = s_ranks[0] == 1
-        out["hit1_loose"] = l_ranks[0] == 1
-    else:
-        # 두 원인: 엄격 = 모두 상위 3개 안, 순위는 둘 다 나온 순위. 느슨 = 하나라도.
-        both = all(r is not None for r in s_ranks)
-        out["rank_strict"] = max(s_ranks) if both else None
-        found_l = [r for r in l_ranks if r is not None]
-        out["rank_loose"] = min(found_l) if found_l else None
-        out["hit3_strict"] = both
-        out["hit3_loose"] = bool(found_l)
-        out["hit1_strict"] = bool(top) and any(match_fault(top[0], f)[0] for f in faults)
-        out["hit1_loose"] = bool(top) and any(match_fault(top[0], f)[1] for f in faults)
+    found_s = [r for r in s_ranks if r is not None]
+    found_l = [r for r in l_ranks if r is not None]
+    out["rank_strict"] = min(found_s) if found_s else None
+    out["rank_loose"] = min(found_l) if found_l else None
+    out["hit3_strict"] = bool(found_s)
+    out["hit3_loose"] = bool(found_l)
+    out["hit1_strict"] = out["rank_strict"] == 1
+    out["hit1_loose"] = out["rank_loose"] == 1
+    if len(faults) > 1:
+        out["both_hit3_strict"] = all(r is not None for r in s_ranks)
 
     onset = []
     for f, r in zip(faults, s_ranks):

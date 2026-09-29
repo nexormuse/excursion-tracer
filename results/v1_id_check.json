@@ -1,0 +1,40 @@
+{
+  "set": "test",
+  "run": "runs/2026-09-26-gemini-3.5-flash-lite-87ff5056",
+  "wrong_cause_scenarios": 57,
+  "with_id_issue": 15,
+  "unique_fix_matches_answer": 13,
+  "by_fault": {
+    "F1": {
+      "wrong": 11,
+      "id_issue": 9,
+      "unique_fix_matches_answer": 9
+    },
+    "F2": {
+      "wrong": 12,
+      "id_issue": 4,
+      "unique_fix_matches_answer": 3
+    },
+    "F3": {
+      "wrong": 3,
+      "id_issue": 0,
+      "unique_fix_matches_answer": 0
+    },
+    "F4": {
+      "wrong": 13,
+      "id_issue": 1,
+      "unique_fix_matches_answer": 1
+    },
+    "F5": {
+      "wrong": 18,
+      "id_issue": 1,
+      "unique_fix_matches_answer": 0
+    }
+  },
+  "f1": {
+    "wrong": 11,
+    "baseline_hit": 9,
+    "baseline_hit_large": 5,
+    "id_issue": 9
+  }
+}

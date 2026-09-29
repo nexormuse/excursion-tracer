@@ -62,6 +62,8 @@ def core_metrics(df: pd.DataFrame) -> dict:
         "onset_accuracy": rate(c["onset_ok"]),
         "f0b_explained": rate(df.loc[df["fault_code"] == "F0b", "f0b_explained"]),
         "invalid_rate": rate(df["invalid"]),
+        "f4_both_hit3_strict": rate(df.loc[df["fault_code"] == "F4", "both_hit3_strict"])
+        if "both_hit3_strict" in df else rate([]),
     }
     if "numcheck_bad" in df and df["numcheck_bad"].notna().any():
         out["numcheck_bad_ratio"] = rate(df["numcheck_bad"])
@@ -117,6 +119,8 @@ def breakdown(df: pd.DataFrame, by: str) -> dict:
                 "hit1_strict": rate(gc["hit1_strict"]), "hit3_strict": rate(gc["hit3_strict"]),
                 "hit3_loose": rate(gc["hit3_loose"]), "miss_rate": rate(gc["missed"]),
             })
+            if "both_hit3_strict" in gc and gc["both_hit3_strict"].notna().any():
+                entry["both_hit3_strict"] = rate(gc["both_hit3_strict"])
         if (~cause).any():
             entry["false_alarm"] = rate(g.loc[~cause, "false_alarm"])
         out[key] = entry

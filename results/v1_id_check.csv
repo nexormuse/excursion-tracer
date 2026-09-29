@@ -1,0 +1,58 @@
+scenario_id,fault_code,effect,stickiness,hypotheses_with_id_issue,id_issue,ids,unique_fix_matches_answer,baseline_hit3_strict
+scn_5001,F4,medium,low,0,False,,False,False
+scn_5002,F1,large,low,1,True,T3; C2,True,True
+scn_5003,F5,large,high,0,False,,False,False
+scn_5004,F4,large,low,0,False,,False,False
+scn_5007,F5,medium,high,0,False,,False,False
+scn_5008,F3,small,low,0,False,,False,False
+scn_5013,F5,large,high,0,False,,False,False
+scn_5014,F1,small,high,1,True,T3; C2,True,True
+scn_5015,F5,small,low,0,False,,False,False
+scn_5017,F1,medium,low,2,True,T4; C1; T5,True,True
+scn_5019,F2,small,low,0,False,,False,False
+scn_5022,F1,medium,high,1,True,T3; C1,True,True
+scn_5024,F5,small,low,3,True,T2; T3; T2,False,False
+scn_5026,F2,medium,high,0,False,,False,False
+scn_5028,F4,medium,high,0,False,,False,False
+scn_5033,F2,small,low,1,True,T5; R1,True,False
+scn_5036,F5,small,high,0,False,,False,False
+scn_5037,F1,large,high,2,True,T2; C2; T3,True,True
+scn_5040,F4,small,high,0,False,,False,False
+scn_5042,F1,large,low,1,True,T3; C1,True,True
+scn_5044,F4,large,high,0,False,,False,False
+scn_5045,F1,small,high,2,True,T3; C2; T1,True,True
+scn_5046,F4,small,high,0,False,,False,False
+scn_5048,F1,large,high,2,True,T3; C2; T5,True,True
+scn_5051,F2,small,high,0,False,,False,False
+scn_5052,F2,medium,high,0,False,,False,False
+scn_5053,F2,large,high,0,False,,False,False
+scn_5055,F4,small,low,0,False,,False,False
+scn_5056,F2,medium,low,0,False,,False,False
+scn_5057,F5,small,low,0,False,,False,False
+scn_5060,F4,medium,low,0,False,,False,False
+scn_5061,F5,large,low,0,False,,False,False
+scn_5062,F1,large,high,0,False,,False,False
+scn_5066,F2,medium,low,1,True,T1; R2,True,False
+scn_5068,F5,small,high,0,False,,False,False
+scn_5069,F2,small,high,0,False,,False,False
+scn_5070,F5,medium,low,0,False,,False,False
+scn_5072,F5,large,high,0,False,,False,False
+scn_5074,F5,medium,high,0,False,,False,False
+scn_5080,F2,medium,high,2,True,T2; T6,True,False
+scn_5082,F4,large,high,0,False,,False,False
+scn_5084,F3,small,low,0,False,,False,False
+scn_5085,F4,medium,low,3,True,T5; C2; T5; C1; T5; C2,True,False
+scn_5088,F5,medium,low,0,False,,False,False
+scn_5089,F2,small,high,0,False,,False,False
+scn_5095,F1,small,low,0,False,,False,False
+scn_5097,F5,small,high,0,False,,False,False
+scn_5098,F5,medium,high,0,False,,False,False
+scn_5099,F4,small,high,0,False,,False,False
+scn_5100,F1,large,low,1,True,T1; C3,True,True
+scn_5102,F4,medium,high,0,False,,False,False
+scn_5104,F5,large,low,0,False,,False,False
+scn_5108,F5,large,low,0,False,,False,False
+scn_5109,F5,medium,low,0,False,,False,False
+scn_5110,F2,large,low,2,True,T4; T1,False,False
+scn_5112,F3,small,high,0,False,,False,False
+scn_5117,F4,medium,high,0,False,,False,False
