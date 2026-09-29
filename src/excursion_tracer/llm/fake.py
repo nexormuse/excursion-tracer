@@ -19,6 +19,10 @@ class FakeDailyQuota(Exception):
     pass
 
 
+class FakeServerError(Exception):
+    pass
+
+
 class FakeClient:
     """responder(system, prompt, schema) -> JSON 문자열 또는 예외."""
 
@@ -43,6 +47,7 @@ class FakeClient:
             scenario_id=ctx.scenario_id, purpose=ctx.purpose,
             is_rate_limit=lambda e: isinstance(e, FakeRateLimit),
             is_daily_quota=lambda e: isinstance(e, FakeDailyQuota),
+            is_transient=lambda e: isinstance(e, FakeServerError),
         )
         usage = Usage(len(prompt) // 4, len(raw) // 4)
         try:

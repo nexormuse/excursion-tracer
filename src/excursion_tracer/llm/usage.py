@@ -146,11 +146,12 @@ def guarded_call(
     purpose: str = "",
     is_rate_limit: Callable[[Exception], bool] = lambda e: False,
     is_daily_quota: Callable[[Exception], bool] = lambda e: False,
+    is_transient: Callable[[Exception], bool] = lambda e: False,
     max_retries: int = 5,
     base_delay: float = 2.0,
 ):
-    """한도 확인 → 요청 → 기록. 분당 한도 오류(429)는 지수 백오프로 최대 max_retries번 다시 시도하고,
-    하루 한도 소진 오류면 다시 시도하지 않고 QuotaExhausted를 낸다.
+    """한도 확인 → 요청 → 기록. 분당 한도 오류(429)와 서버의 일시 오류(5xx)는 지수 백오프로
+    최대 max_retries번 다시 시도하고, 하루 한도 소진 오류면 다시 시도하지 않고 QuotaExhausted를 낸다.
 
     do_request()는 (결과, 입력 토큰, 출력 토큰, 추가 기록)을 돌려준다.
     """
@@ -165,8 +166,9 @@ def guarded_call(
                 now = tracker.clock()
                 raise QuotaExhausted(tracker.used_in_window(now), tracker.cap,
                                      tracker.next_reset(now), reason="제공사가 하루 한도 소진을 알렸다") from e
-            if is_rate_limit(e) and attempt < max_retries:
-                tracker.record(**ids, status="rate_limited", extra={"error": str(e)[:300]})
+            if (is_rate_limit(e) or is_transient(e)) and attempt < max_retries:
+                status = "rate_limited" if is_rate_limit(e) else "server_error"
+                tracker.record(**ids, status=status, extra={"error": str(e)[:300]})
                 tracker.sleep(base_delay * 2**attempt)
                 continue
             tracker.record(**ids, status="error", extra={"error": str(e)[:300]})

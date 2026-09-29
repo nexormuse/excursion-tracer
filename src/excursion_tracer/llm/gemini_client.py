@@ -20,6 +20,11 @@ def _is_rate_limit(e: Exception) -> bool:
     return isinstance(e, genai_errors.APIError) and e.code == 429
 
 
+def _is_transient(e: Exception) -> bool:
+    """서버 쪽 일시 오류 (예: 503 UNAVAILABLE, 모델 과부하)."""
+    return isinstance(e, genai_errors.APIError) and e.code in (500, 502, 503, 504)
+
+
 def _is_daily_quota(e: Exception) -> bool:
     if not _is_rate_limit(e):
         return False
@@ -82,7 +87,7 @@ class GeminiClient:
         resp = guarded_call(
             self.tracker, do_request, model=self.model, run_id=ctx.run_id,
             scenario_id=ctx.scenario_id, purpose=ctx.purpose,
-            is_rate_limit=_is_rate_limit, is_daily_quota=_is_daily_quota,
+            is_rate_limit=_is_rate_limit, is_daily_quota=_is_daily_quota, is_transient=_is_transient,
         )
         um = resp.usage_metadata
         usage = Usage((um.prompt_token_count or 0) if um else 0,

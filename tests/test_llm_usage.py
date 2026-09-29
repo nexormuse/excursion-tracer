@@ -9,7 +9,7 @@ import pytest
 from pydantic import BaseModel
 
 from excursion_tracer.llm.base import CallContext, SchemaError
-from excursion_tracer.llm.fake import FakeClient, FakeDailyQuota, FakeRateLimit
+from excursion_tracer.llm.fake import FakeClient, FakeDailyQuota, FakeRateLimit, FakeServerError
 from excursion_tracer.llm.usage import KST, QuotaExhausted, UsageTracker
 
 
@@ -171,3 +171,18 @@ def test_config_limits_are_used_as_written(cfg, tmp_path):
     tr = UsageTracker.from_config(cfg.llm, log_path=tmp_path / "u.jsonl")
     assert (tr.rpm_limit, tr.rpd_limit) == (cfg.llm.rpm_limit, cfg.llm.rpd_limit)
     assert tr.cap == int(cfg.llm.rpd_limit * cfg.llm.stop_at_ratio)
+
+
+def test_server_error_is_retried(tmp_path):
+    tr, clock = make(tmp_path, rpm=1000)
+    state = {"n": 0}
+
+    def responder(s, p, schema):
+        state["n"] += 1
+        if state["n"] == 1:
+            raise FakeServerError("503 UNAVAILABLE")
+        return '{"x": 3}'
+
+    assert FakeClient(tr, responder).structured("s", "p", Out, 10, 0.0).data == {"x": 3}
+    statuses = [json.loads(l)["status"] for l in tr.log_path.read_text().splitlines()]
+    assert statuses == ["server_error", "ok"] and 2.0 in clock.slept
