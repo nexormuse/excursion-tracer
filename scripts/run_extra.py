@@ -21,6 +21,7 @@ import numpy as np
 import pandas as pd
 
 from excursion_tracer.agent.loop import RUNS_DIR, find_run_id, run_set
+from excursion_tracer.agent.loop_v2 import find_run_id_v2, run_set_v2
 from excursion_tracer.config import PROJECT_ROOT, load_config
 from excursion_tracer.eval.ground_truth import load_ground_truth
 from excursion_tracer.eval.run_eval import scenario_dirs
@@ -45,10 +46,10 @@ def stratified_sample(codes: dict[str, str], n: int, seed: int) -> list[str]:
     return sorted(out)
 
 
-def pick_showcase(per: pd.DataFrame, set_name: str, agent: str) -> dict:
+def pick_showcase(per: pd.DataFrame, set_name: str, agent: str, baseline: str = "baseline") -> dict:
     p = per[per["set"] == set_name]
     a = p[p["method"] == agent].set_index("scenario_id")
-    b = p[p["method"] == "baseline"].set_index("scenario_id")
+    b = p[p["method"] == baseline].set_index("scenario_id")
     cause = a[~a["fault_code"].isin(["F0a", "F0b"])]
     win = [s for s in cause.index if cause.loc[s, "hit1_strict"] and not b.loc[s, "hit3_strict"]]
     if not win:
@@ -64,15 +65,20 @@ def pick_showcase(per: pd.DataFrame, set_name: str, agent: str) -> dict:
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("what", choices=["repeat", "showcase"])
-    ap.add_argument("--set", default="test", choices=["dev", "test"])
-    ap.add_argument("--agent-method", default="agent", help="per_scenario.csv의 에이전트 방법 이름")
+    ap.add_argument("--set", default="test", choices=["dev", "test", "test2"])
+    ap.add_argument("--version", default="v1", choices=["v1", "v2"])
+    ap.add_argument("--agent-method", default=None, help="per_scenario.csv의 에이전트 방법 이름")
+    ap.add_argument("--baseline-method", default=None, help="per_scenario.csv의 기준선 방법 이름")
     ap.add_argument("--data", type=Path, default=PROJECT_ROOT / "data")
     ap.add_argument("--runs", type=Path, default=RUNS_DIR)
     args = ap.parse_args(argv)
 
     cfg = load_config()
     dirs = {d.name: d for d in scenario_dirs(args.data, args.set)}
-    base_run = find_run_id(cfg.llm.model, args.runs)
+    finder, runner = (find_run_id, run_set) if args.version == "v1" else (find_run_id_v2, run_set_v2)
+    agent_method = args.agent_method or ("agent" if args.version == "v1" else "agent_v2")
+    baseline_method = args.baseline_method or ("baseline" if args.version == "v1" else "baseline_v2")
+    base_run = finder(cfg.llm.model, args.runs)
     tracker = UsageTracker.from_config(cfg.llm)
     from excursion_tracer.llm.gemini_client import GeminiClient
 
@@ -82,23 +88,25 @@ def main(argv=None) -> int:
         if args.what == "repeat":
             codes = {k: load_ground_truth(d)["fault_code"] for k, d in dirs.items()}
             sample = stratified_sample(codes, cfg.eval.repeat_sample, cfg.seed_base[args.set])
-            (RESULTS / "repeat_sample.json").write_text(json.dumps(
+            name = "repeat_sample.json" if args.version == "v1" else f"repeat_sample_{args.set}.json"
+            (RESULTS / name).write_text(json.dumps(
                 {"set": args.set, "base_run": base_run, "scenarios": sample}, indent=2) + "\n")
             print(f"반복성 표본 {len(sample)}개: {sample}")
             for k in range(1, cfg.eval.repeat_runs):
                 rid = f"{base_run}-rep{k}"
                 print(f"\n[{rid}]")
-                run_set(client, cfg, [dirs[s] for s in sample], rid, args.runs)
+                runner(client, cfg, [dirs[s] for s in sample], rid, args.runs)
         else:
             per = pd.read_csv(RESULTS / "per_scenario.csv")
-            chosen = pick_showcase(per, args.set, args.agent_method)
-            (RESULTS / "showcase_selection.json").write_text(json.dumps(
+            chosen = pick_showcase(per, args.set, agent_method, baseline_method)
+            name = "showcase_selection.json" if args.version == "v1" else f"showcase_selection_{args.set}.json"
+            (RESULTS / name).write_text(json.dumps(
                 {"set": args.set, "base_run": base_run, "selection": chosen,
                  "rule": __doc__.split("쇼케이스: ")[1].split("\n선정")[0].strip()},
                 ensure_ascii=False, indent=2) + "\n")
             print(f"쇼케이스 선정: {chosen}")
             rid = f"{base_run}-showcase-ko"
-            run_set(client, cfg, [dirs[s] for s in chosen.values() if s], rid, args.runs, language="ko")
+            runner(client, cfg, [dirs[s] for s in chosen.values() if s], rid, args.runs, language="ko")
     except QuotaExhausted as e:
         print(str(e), file=sys.stderr)
         return 3

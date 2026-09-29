@@ -170,9 +170,12 @@ def evaluate(cfg: Config, set_name: str, data_root: Path, methods: dict[str, Pat
             cause = ~fa["fault_code"].isin(["F0a", "F0b"])
             compare[f"{a}_vs_{b}"] = {"hit3_strict_mcnemar": mcnemar_paired(
                 fa.loc[cause, "hit3_strict"], fb.loc[cause, "hit3_strict"])}
-    for key in ("baseline_vs_agent", "agent_vs_baseline"):
+    # 대표 McNemar: 에이전트 v2와 기준선 v2가 있으면 그 쌍, 아니면 에이전트와 기준선
+    for key in ("baseline_v2_vs_agent_v2", "agent_v2_vs_baseline_v2", "baseline_vs_agent", "agent_vs_baseline"):
         if key in compare:
             compare["mcnemar_p"] = compare[key]["hit3_strict_mcnemar"]["p"]
+            compare["mcnemar_pair"] = key
+            break
     set_summary["compare"] = compare
     regen = [g["regen_count"] for g in gts.values()]
     set_summary["info"] = {

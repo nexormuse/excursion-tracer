@@ -57,7 +57,8 @@ def main(argv=None) -> int:
         from excursion_tracer.eval.run_eval import evaluate_repeatability
 
         name, _, paths = args.repeat.partition("=")
-        sample = json.loads((args.results / "repeat_sample.json").read_text())["scenarios"]
+        sample_file = args.results / ("repeat_sample.json" if args.set == "test" else f"repeat_sample_{args.set}.json")
+        sample = json.loads(sample_file.read_text())["scenarios"]
         r = evaluate_repeatability(args.set, name, [Path(p) for p in paths.split(",")], sample,
                                    args.results)
         print(f"\n반복성 [{name}]: {_fmt(r)} (실행 {r['runs_per_scenario']}회, 누락 {r['missing']})")
