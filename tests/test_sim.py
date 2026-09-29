@@ -29,7 +29,7 @@ from excursion_tracer.sim.generate import (
 )
 from excursion_tracer.sim.monitor import evaluate_alert
 
-from .conftest import generated_dev_dirs, generated_test_dirs
+from .conftest import generated_dev_dirs, generated_test2_dirs, generated_test_dirs
 
 OBSERVE_END = pd.Timestamp("2026-01-01") + pd.Timedelta(days=21)
 
@@ -226,6 +226,11 @@ def test_injected_effect_size_near_delta_dev_set():
     _assert_injection(_injection_rows(generated_dev_dirs()))
 
 
+@pytest.mark.skipif(not generated_test2_dirs(), reason="data/test2 가 아직 없다")
+def test_injected_effect_size_near_delta_test2_set():
+    _assert_injection(_injection_rows(generated_test2_dirs()))
+
+
 @pytest.mark.skipif(not generated_test_dirs(), reason="data/test 가 아직 없다")
 def test_injected_effect_size_near_delta_test_set():
     _assert_injection(_injection_rows(generated_test_dirs()))
@@ -301,13 +306,18 @@ def test_observed_files_have_no_cause_words_dev_set():
     _assert_no_leak_words(generated_dev_dirs())
 
 
+@pytest.mark.skipif(not generated_test2_dirs(), reason="data/test2 가 아직 없다")
+def test_observed_files_have_no_cause_words_test2_set():
+    _assert_no_leak_words(generated_test2_dirs())
+
+
 @pytest.mark.skipif(not generated_test_dirs(), reason="data/test 가 아직 없다")
 def test_observed_files_have_no_cause_words_test_set():
     _assert_no_leak_words(generated_test_dirs())
 
 
 def test_meta_has_only_allowed_keys(fixture_set):
-    for d in fixture_set.dirs() + generated_dev_dirs() + generated_test_dirs():
+    for d in fixture_set.dirs() + generated_dev_dirs() + generated_test_dirs() + generated_test2_dirs():
         meta = json.loads((d / "meta.json").read_text())
         assert set(meta) == {"scenario_id", "set", "seed", "created_at"}
         assert meta["seed"] == int(meta["scenario_id"].split("_")[1])
@@ -336,6 +346,11 @@ def test_every_scenario_has_alert(fixture_set):
 @pytest.mark.skipif(not generated_dev_dirs(), reason="data/dev 가 아직 없다")
 def test_every_dev_scenario_has_alert():
     _assert_alerts(generated_dev_dirs())
+
+
+@pytest.mark.skipif(not generated_test2_dirs(), reason="data/test2 가 아직 없다")
+def test_every_test2_scenario_has_alert():
+    _assert_alerts(generated_test2_dirs())
 
 
 @pytest.mark.skipif(not generated_test_dirs(), reason="data/test 가 아직 없다")

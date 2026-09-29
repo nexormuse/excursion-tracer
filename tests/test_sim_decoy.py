@@ -16,7 +16,7 @@ import pytest
 
 from excursion_tracer.eval.ground_truth import load_ground_truth
 
-from .conftest import generated_dev_dirs, generated_test_dirs
+from .conftest import generated_dev_dirs, generated_test2_dirs, generated_test_dirs
 
 DECOY_LIMIT = 0.01
 
@@ -75,3 +75,8 @@ def test_no_cause_tool_differences_are_decoy_level_dev_set():
 @pytest.mark.skipif(not generated_test_dirs(), reason="data/test 가 아직 없다")
 def test_no_cause_tool_differences_are_decoy_level_test_set():
     _assert_decoy_level(_no_cause_dirs(generated_test_dirs()))
+
+
+@pytest.mark.skipif(not generated_test2_dirs(), reason="data/test2 가 아직 없다")
+def test_no_cause_tool_differences_are_decoy_level_test2_set():
+    _assert_decoy_level(_no_cause_dirs(generated_test2_dirs()))
