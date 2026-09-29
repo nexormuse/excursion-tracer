@@ -202,6 +202,34 @@ class EvalConfig(Base):
     showcase_n: int = Field(gt=0)
 
 
+class ConfByRatio(Base):
+    below_1_5: float = Field(ge=0, le=1)
+    from_1_5_to_3: float = Field(ge=0, le=1)
+    above_3: float = Field(ge=0, le=1)
+
+
+class F6Config(Base):
+    n_windows: IntRange
+    window_hours: FloatRange
+
+
+class V2Config(Base):
+    null_window_test_days: IntRange
+    null_quantile: float = Field(gt=0, lt=1)
+    baseline_no_cause_ratio: float = Field(gt=0)
+    baseline_conf_by_ratio: ConfByRatio
+    event_scan_days: float = Field(gt=0)
+    evidence_max_chars: int = Field(gt=0)
+    round1_max_tokens: int = Field(gt=0)
+    round2_max_tokens: int = Field(gt=0)
+    min_checks: int = Field(ge=0)
+    f6: F6Config
+
+
+class Test2Set(SetSpec):
+    seed_base: int
+
+
 class Config(Base):
     project: str
     seed_base: dict[str, int]
@@ -215,16 +243,27 @@ class Config(Base):
     agent: AgentConfig
     llm: LLMConfig
     eval: EvalConfig
+    v2: V2Config
+    test2_set: Test2Set
 
     @model_validator(mode="after")
     def _check(self) -> "Config":
         missing = set(self.sets.model_dump()) - set(self.seed_base)
         if missing:
             raise ValueError(f"seed_base에 빠진 세트: {sorted(missing)}")
+        if "F6" in self.sets.dev.mix or "F6" in self.sets.test.mix:
+            raise ValueError("F6는 test2 세트 전용이다")
         return self
+
+    def set_spec(self, set_name: str) -> "SetSpec":
+        if set_name == "test2":
+            return self.test2_set
+        return getattr(self.sets, set_name)
 
     def seed_for(self, set_name: str, index: int = 0) -> int:
         """세트 이름과 시나리오 순번으로 seed를 만든다."""
+        if set_name == "test2":
+            return self.test2_set.seed_base + index
         if set_name not in self.seed_base:
             raise KeyError(f"모르는 세트: {set_name}")
         return self.seed_base[set_name] + index

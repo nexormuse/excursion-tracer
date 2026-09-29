@@ -46,11 +46,12 @@ def _fab() -> dict:
 
 
 def make_data(effect=None, n_lots=240, wafers=10, seed=0, tool_of=None, p2_prob=None,
-              lot_sd=0.01, wafer_sd=0.01) -> ScenarioData:
+              lot_sd=0.01, wafer_sd=0.01, p2_by_lot=None, events=None, window_days=None) -> ScenarioData:
     """effect(lot, slot, route, t_hours, product) -> 수율 감소량.
 
     tool_of(step, lot, route, rng) 로 설비 배정을 바꿀 수 있다 (기본은 무작위).
-    p2_prob(route) 로 설비 경로에 따라 제품 비중을 바꿀 수 있다.
+    p2_prob(route) 로 설비 경로에 따라, p2_by_lot(i) 로 로트 순번에 따라 제품 비중을 바꿀 수 있다.
+    events 는 events.parquet 형식의 행 목록, window_days=(시작일, 끝일) 은 알림 구간이다.
     """
     rng = np.random.default_rng(seed)
     hist, waf = [], []
@@ -60,7 +61,7 @@ def make_data(effect=None, n_lots=240, wafers=10, seed=0, tool_of=None, p2_prob=
         route = {}
         for sid, (nt, _, _) in STEPS.items():
             route[sid] = tool_of(sid, i, route, rng) if tool_of else int(rng.integers(nt))
-        prob = p2_prob(route) if p2_prob else 0.4
+        prob = p2_prob(route) if p2_prob else (p2_by_lot(i) if p2_by_lot else 0.4)
         product = "P2" if rng.random() < prob else "P1"
         lot_eff = rng.normal(0, lot_sd)
         for s in range(wafers):
@@ -82,17 +83,17 @@ def make_data(effect=None, n_lots=240, wafers=10, seed=0, tool_of=None, p2_prob=
                         "test_ts": T0 + pd.Timedelta(hours=t + 24)})
     wafers_df = pd.DataFrame(waf)
     thr = float(np.quantile(wafers_df["yield"], 0.1))
+    ws, we = window_days or (0, 60)
     alert = {
         "level": "alarm",
-        "window_start": T0.isoformat(),
-        "window_end": (T0 + pd.Timedelta(days=60)).isoformat(),
+        "window_start": (T0 + pd.Timedelta(days=ws)).isoformat(),
+        "window_end": (T0 + pd.Timedelta(days=we)).isoformat(),
         "baseline": {"low_yield_threshold": thr, "low_rate": 0.1},
         "by_product": {},
     }
+    ev_cols = ["event_id", "event_type", "step_id", "tool_id", "chamber_id", "recipe_id", "ts"]
     return ScenarioData("scn_test", _fab(), alert, pd.DataFrame(hist), wafers_df,
-                        pd.DataFrame(columns=["event_id", "event_type", "step_id", "tool_id",
-                                              "chamber_id", "recipe_id", "ts"]),
-                        pd.DataFrame())
+                        pd.DataFrame(events or [], columns=ev_cols), pd.DataFrame())
 
 
 # ---------------------------------------------------------------- 기본 함수

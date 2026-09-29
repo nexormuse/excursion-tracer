@@ -67,9 +67,13 @@ def scan_all(
     product: str | None = None,
     fdr_method: str = "fdr_bh",
     stratify: bool = True,
+    history: pd.DataFrame | None = None,
 ) -> pd.DataFrame:
-    """모든 단계·수준의 비교 결과 (BH 보정 q 포함). q 오름차순, 동률은 |median_diff| 내림차순."""
-    h = data.analysis_history
+    """모든 단계·수준의 비교 결과 (BH 보정 q 포함). q 오름차순, 동률은 |median_diff| 내림차순.
+
+    history를 주면 알림 구간 대신 그 이력(웨이퍼 수율이 붙은 것)으로 비교한다.
+    """
+    h = data.analysis_history if history is None else history
     if product:
         h = h[h["product"] == product]
     value = "resid" if stratify else "yield"

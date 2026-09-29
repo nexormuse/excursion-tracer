@@ -59,6 +59,24 @@ class ScenarioData:
         return w.reset_index(drop=True)
 
     @cached_property
+    def day0(self) -> pd.Timestamp:
+        """시뮬레이션 기준일 00:00 (가장 이른 처리 시각의 날짜)."""
+        return self.history["track_in_ts"].min().floor("D")
+
+    def window_wafers(self, first_day: int, last_day: int) -> pd.DataFrame:
+        """측정일 first_day~last_day(기준일로부터, 양끝 포함)에 측정된 웨이퍼. resid는 그 구간의 제품별 중앙값 기준."""
+        w = self.wafers
+        lo = self.day0 + pd.Timedelta(days=first_day)
+        hi = self.day0 + pd.Timedelta(days=last_day + 1)
+        w = w[(w["test_ts"] >= lo) & (w["test_ts"] < hi)].copy()
+        w["low"] = w["yield"] < self.low_threshold
+        w["resid"] = w["yield"] - w.groupby("product")["yield"].transform("median")
+        return w.reset_index(drop=True)
+
+    def window_history(self, first_day: int, last_day: int) -> pd.DataFrame:
+        return self._join(self.window_wafers(first_day, last_day))
+
+    @cached_property
     def analysis_history(self) -> pd.DataFrame:
         """분석 대상 웨이퍼의 이력에 수율 정보를 붙인 표."""
         return self._join(self.analysis_wafers)

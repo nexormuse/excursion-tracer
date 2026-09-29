@@ -80,3 +80,16 @@ eval:
   repeat_runs: 3
   repeat_sample: 20
   showcase_n: 3
+
+v2:
+  null_window_test_days: [3, 7]
+  null_quantile: 0.99
+  baseline_no_cause_ratio: 1.5            # dev에서만 조정
+  baseline_conf_by_ratio: {below_1_5: 0.3, from_1_5_to_3: 0.6, above_3: 0.9}
+  event_scan_days: 3
+  evidence_max_chars: 8000
+  round1_max_tokens: 1500
+  round2_max_tokens: 2000
+  min_checks: 1
+  f6: {n_windows: [2, 3], window_hours: [12, 24]}
+test2_set: {n: 120, seed_base: 7000, mix: {F0a: 12, F0b: 12, F1: 18, F2: 15, F3: 15, F4: 15, F5: 15, F6: 18}}

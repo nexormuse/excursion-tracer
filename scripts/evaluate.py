@@ -21,7 +21,7 @@ def _fmt(r: dict) -> str:
 
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    ap.add_argument("--set", required=True, choices=["dev", "test"])
+    ap.add_argument("--set", required=True, choices=["dev", "test", "test2"])
     ap.add_argument("--method", action="append", required=True,
                     help="이름=보고서 폴더 (여러 번 줄 수 있다)")
     ap.add_argument("--data", type=Path, default=PROJECT_ROOT / "data")
