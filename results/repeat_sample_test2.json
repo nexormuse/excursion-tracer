@@ -1,0 +1,16 @@
+{
+  "set": "test2",
+  "base_run": "2026-09-29-gemini-3.5-flash-lite-v2-c2ed5083",
+  "scenarios": [
+    "scn_7033",
+    "scn_7034",
+    "scn_7044",
+    "scn_7067",
+    "scn_7081",
+    "scn_7084",
+    "scn_7099",
+    "scn_7104",
+    "scn_7110",
+    "scn_7119"
+  ]
+}

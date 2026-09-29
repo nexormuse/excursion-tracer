@@ -19,12 +19,16 @@ from excursion_tracer.eval.ground_truth import load_ground_truth
 SECTION_TOOL = [
     ("Alert", "alert.json 읽기"),
     ("Fab overview", "fab.json 읽기"),
+    ("Product-adjusted change", "product_adjusted (제품별 알림 전후 변화)"),
+    ("Normal spread", "null_reference (알림 전 구간의 평소 차이)"),
     ("Commonality candidates", "commonality_scan (tool·chamber·recipe, 제품 층화 + 전체 BH)"),
+    ("Event scan", "events_scan (모든 이벤트의 전후 비교)"),
     ("Change points", "change_point (상위 후보, 순열검정)"),
     ("Events within", "get_events (변화점 ±2일)"),
     ("Confounding", "confounding_check (파이 계수, 층화 비교)"),
     ("Tool x recipe", "interaction_test (설비×레시피 분산분석)"),
     ("Product mix", "product_mix (일별 제품 비중)"),
+    ("Daily product mix", "product_mix (일별 제품 비중)"),
 ]
 MAX_LINES = 6
 
@@ -73,7 +77,8 @@ def _report_md(fr: dict) -> list[str]:
 
 
 def render_trace(scenario_dir: Path, run_record: Path, per: pd.DataFrame, reason: str,
-                 showcase_record: Path | None = None) -> str:
+                 showcase_record: Path | None = None, agent_key: str = "agent",
+                 baseline_key: str = "baseline") -> str:
     rec = json.loads(run_record.read_text(encoding="utf-8"))
     sid = rec["scenario_id"]
     alert = json.loads((scenario_dir / "alert.json").read_text(encoding="utf-8"))
@@ -126,6 +131,15 @@ def render_trace(scenario_dir: Path, run_record: Path, per: pd.DataFrame, reason
         L.append("추가 확인 요청이 없어 1회차 보고서가 최종 보고서다.")
         L.append("")
 
+    if rec.get("round2") and rec.get("preliminary_report"):
+        L += ["## 3a. 1회차 잠정 보고서", ""] + _report_md(rec["preliminary_report"]) + [""]
+    if rec.get("id_normalized") or rec.get("id_problems") or rec.get("id_retry"):
+        L += ["## 3b. ID 검증", ""]
+        L += [f"- 정규화: {x}" for x in rec.get("id_normalized", [])]
+        L += [f"- 해석 안 된 ID: {x}" for x in rec.get("id_problems", [])]
+        if rec.get("id_retry"):
+            L.append(f"- ID 목록을 붙여 1회 재요청 (이전 문제: {'; '.join(rec['id_retry']['problems_before'])})")
+        L.append("")
     L += ["## 3. 최종 보고서", ""] + _report_md(rec["final_report"])
     nc = rec.get("numcheck") or {}
     L.append(f"- 숫자 대조: 근거 없는 숫자 {nc.get('unsupported', [])}")
@@ -139,8 +153,8 @@ def render_trace(scenario_dir: Path, run_record: Path, per: pd.DataFrame, reason
         L.append("")
 
     gt = load_ground_truth(scenario_dir)
-    row = per[(per["scenario_id"] == sid) & (per["method"] == "agent")].iloc[0]
-    base = per[(per["scenario_id"] == sid) & (per["method"] == "baseline")]
+    row = per[(per["scenario_id"] == sid) & (per["method"] == agent_key)].iloc[0]
+    base = per[(per["scenario_id"] == sid) & (per["method"] == baseline_key)]
     L += ["## 5. 정답 공개", "",
           f"- 원인 유형 {gt['fault_code']}, 효과 크기 {gt['cell']['effect'] or '-'}, "
           f"stickiness {gt['cell']['stickiness']}, 재생성 {gt['regen_count']}회"]
@@ -152,7 +166,7 @@ def render_trace(scenario_dir: Path, run_record: Path, per: pd.DataFrame, reason
     L.append("")
     L.append("| 방법 | 판정 | Hit@1 엄격 | Hit@3 엄격 | Hit@3 느슨 | 엄격 순위 | 오경보 |")
     L.append("|---|---|---|---|---|---|---|")
-    for name, r in [("agent", row)] + ([("baseline", base.iloc[0])] if len(base) else []):
+    for name, r in [(agent_key, row)] + ([(baseline_key, base.iloc[0])] if len(base) else []):
         L.append(f"| {name} | {r['verdict']} | {_cell(r['hit1_strict'])} | {_cell(r['hit3_strict'])} | "
                  f"{_cell(r['hit3_loose'])} | {'-' if pd.isna(r['rank_strict']) else int(r['rank_strict'])} | "
                  f"{_cell(r['false_alarm'])} |")

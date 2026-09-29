@@ -1,0 +1,16 @@
+{
+  "set": "test2",
+  "run": "runs/2026-09-29-gemini-3.5-flash-lite-v2-c2ed5083",
+  "selection": {
+    "success": "scn_7003",
+    "failure": "scn_7002",
+    "new": "scn_7004",
+    "changed": "scn_7068"
+  },
+  "labels": {
+    "success": "성공",
+    "failure": "실패",
+    "new": "F6 (2차의 새 유형)",
+    "changed": "반증 확인이 판단을 바꾼 사례"
+  }
+}

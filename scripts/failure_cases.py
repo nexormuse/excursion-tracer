@@ -108,6 +108,7 @@ def main(argv=None) -> int:
     ap.add_argument("--set", default="test")
     ap.add_argument("--run", type=Path, required=True)
     ap.add_argument("--method", default="agent")
+    ap.add_argument("--title", default=None)
     ap.add_argument("--data", type=Path, default=PROJECT_ROOT / "data")
     ap.add_argument("--out", type=Path, default=PROJECT_ROOT / "results" / "failure_analysis.md")
     args = ap.parse_args(argv)
@@ -117,7 +118,7 @@ def main(argv=None) -> int:
     per = per[(per["set"] == args.set) & (per["method"] == args.method)].reset_index(drop=True)
     chosen = select(per)
     rows = per.set_index("scenario_id")
-    parts = [f"# 실패 사례 분석 ({args.set}, {args.method})", "",
+    parts = [f"# {args.title or '실패 사례 분석'} ({args.set}, {args.method})", "",
              "선정 규칙: 원인 시나리오는 Hit@3 엄격 실패, 원인 없는 시나리오는 오경보를 실패로 보고, "
              "실패 비율이 높은 원인 유형부터 5개 유형을 골라 유형마다 번호가 가장 작은 실패 시나리오를 택했다.", ""]
     fail = per.assign(fail=per.apply(_is_fail, axis=1)).groupby("fault_code")["fail"].agg(["sum", "size"])
@@ -128,9 +129,11 @@ def main(argv=None) -> int:
     parts.append("")
     if args.out.is_file():
         old = args.out.read_text(encoding="utf-8")
-        m = re.search(rf"{re.escape(MANUAL_START)}.*?{re.escape(MANUAL_END)}", old, flags=re.S)
-        if m:
-            parts += [m.group(0), ""]
+        for pat in (rf"{re.escape(MANUAL_START)}.*?{re.escape(MANUAL_END)}",
+                    r"<!-- diagnosis:start -->.*?<!-- diagnosis:end -->"):
+            m = re.search(pat, old, flags=re.S)
+            if m:
+                parts += [m.group(0), ""]
     for sid in chosen:
         parts.append(case_md(cfg, sid, args.data / args.set, args.run, rows.loc[sid]))
     args.out.write_text("\n".join(parts), encoding="utf-8")

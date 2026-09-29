@@ -29,9 +29,11 @@ METHOD_LABEL = {"agent": "LLM 에이전트", "baseline": "통계 기준선"}
 SEQ = ["#cde2fb", "#b7d3f6", "#9ec5f4", "#86b6ef", "#6da7ec", "#5598e7", "#3987e5",
        "#2a78d6", "#256abf", "#1c5cab", "#184f95", "#104281", "#0d366b"]
 FONTS = ["AppleGothic", "NanumGothic", "Noto Sans CJK KR", "Malgun Gothic"]
-CAUSE_CODES = ["F1", "F2", "F3", "F4", "F5"]
+CAUSE_CODES = ["F1", "F2", "F3", "F4", "F5", "F6"]
 FAULT_LABEL = {"F1": "F1 정비 후\n챔버 열화", "F2": "F2 설비×\n레시피", "F3": "F3 드리프트",
-               "F4": "F4 두 원인", "F5": "F5 레시피 변경\n(test 전용)"}
+               "F4": "F4 두 원인", "F5": "F5 레시피 변경", "F6": "F6 간헐적\n챔버 이상"}
+V1_GRAY = "#8a8984"
+DEFAULT_KEYS = {"agent": "agent", "baseline": "baseline"}
 
 
 def setup() -> None:
@@ -77,23 +79,25 @@ def _bar(ax, x, r: dict, color: str, width: float, label=None):
             fontsize=11, color=INK)
 
 
-def _methods(s: dict) -> list[str]:
-    return [m for m in ("agent", "baseline") if m in s]
+def _methods(s: dict, keys: dict | None = None) -> list[tuple[str, str]]:
+    """(역할, summary 키) 목록. 역할은 색과 이름을 정한다."""
+    keys = keys or DEFAULT_KEYS
+    return [(role, keys[role]) for role in ("agent", "baseline") if keys.get(role) in s]
 
 
 # ---------------------------------------------------------------- fig1
-def fig1_overall(summary: dict, set_name: str, out: Path) -> Path:
+def fig1_overall(summary: dict, set_name: str, out: Path, keys: dict | None = None) -> Path:
     s = summary[set_name]
-    ms = _methods(s)
+    ms = _methods(s, keys)
     metrics = [("hit3_strict", "Hit@3 (엄격)\n원인 시나리오"), ("hit3_loose", "Hit@3 (느슨)\n원인 시나리오"),
                ("false_alarm", "오경보율\n원인 없는 시나리오 (낮을수록 좋음)")]
     fig = _fig()
     ax = fig.add_subplot(111)
     w = 0.34
     for i, (key, _) in enumerate(metrics):
-        for j, m in enumerate(ms):
+        for j, (role, m) in enumerate(ms):
             x = i + (j - (len(ms) - 1) / 2) * (w + 0.02)
-            _bar(ax, x, s[m][key], METHOD_COLOR[m], w, METHOD_LABEL[m] if i == 0 else None)
+            _bar(ax, x, s[m][key], METHOD_COLOR[role], w, METHOD_LABEL[role] if i == 0 else None)
     ch = s["chance"]
     for i, key in ((0, "hit3_strict"), (1, "hit3_loose")):
         ax.plot([i - 0.42, i + 0.42], [ch[key]] * 2, ls="--", color=INK, lw=1.5,
@@ -102,22 +106,23 @@ def fig1_overall(summary: dict, set_name: str, out: Path) -> Path:
     ax.set_xticks(range(len(metrics)), [m[1] for m in metrics])
     ax.set_ylim(0, 1.18)
     ax.set_ylabel("비율 (95% Wilson 신뢰구간)")
-    n = s[ms[0]]
+    n = s[ms[0][1]]
     ax.set_title(f"{set_name} 세트 전체 성능: 원인 시나리오 {n['n_cause']}개, 원인 없는 시나리오 {n['n_no_cause']}개")
     ax.legend(loc="upper left", ncol=3)
     return _save(fig, out)
 
 
 # ---------------------------------------------------------------- fig2
-def fig2_difficulty(per: pd.DataFrame, set_name: str, out: Path) -> Path:
+def fig2_difficulty(per: pd.DataFrame, set_name: str, out: Path, keys: dict | None = None) -> Path:
     p = per[(per["set"] == set_name) & per["effect"].notna()]
-    ms = [m for m in ("agent", "baseline") if m in set(p["method"])]
+    keys = keys or DEFAULT_KEYS
+    ms = [(role, keys[role]) for role in ("agent", "baseline") if keys.get(role) in set(p["method"])]
     effects, sticks = ["small", "medium", "large"], ["low", "high"]
     cmap = LinearSegmentedColormap.from_list("seq_blue", SEQ)
     fig = _fig()
     axes = fig.subplots(1, len(ms), sharey=True, gridspec_kw={"wspace": 0.08})
     axes = np.atleast_1d(axes)
-    for idx, (ax, m) in enumerate(zip(axes, ms)):
+    for idx, (ax, (role, m)) in enumerate(zip(axes, ms)):
         g = p[p["method"] == m].groupby(["stickiness", "effect"])["hit3_strict"]
         k = g.sum().unstack().reindex(index=sticks, columns=effects)
         n = g.size().unstack().reindex(index=sticks, columns=effects)
@@ -133,35 +138,37 @@ def fig2_difficulty(per: pd.DataFrame, set_name: str, out: Path) -> Path:
         ax.set_yticks(range(2), ["stickiness 저\n(교란 약함)", "stickiness 고\n(교란 강함)"])
         if idx > 0:
             ax.tick_params(axis="y", labelleft=False, length=0)
-        ax.set_title(METHOD_LABEL[m])
+        ax.set_title(METHOD_LABEL[role])
         for sp in ax.spines.values():
             sp.set_visible(False)
     sm = plt.cm.ScalarMappable(cmap=cmap, norm=plt.Normalize(0, 1))
     cb = fig.colorbar(sm, ax=list(axes), shrink=0.7)
     cb.set_label("Hit@3 (엄격)", labelpad=12)
-    sizes = p.groupby(["method", "stickiness", "effect"]).size()
+    sizes = p[p["method"].isin([m for _, m in ms])].groupby(["method", "stickiness", "effect"]).size()
     size_txt = f"칸마다 {sizes.min()}개" if sizes.min() == sizes.max() else f"칸마다 {sizes.min()}~{sizes.max()}개"
     fig.suptitle(f"{set_name} 세트 난이도 칸별 Hit@3 (엄격), 원인 시나리오 ({size_txt})", fontsize=16)
     return _save(fig, out)
 
 
 # ---------------------------------------------------------------- fig3
-def fig3_by_fault(summary: dict, set_name: str, out: Path) -> Path:
+def fig3_by_fault(summary: dict, set_name: str, out: Path, keys: dict | None = None,
+                  new_codes: tuple[str, ...] = ("F5",)) -> Path:
     s = summary[set_name]
-    ms = _methods(s)
-    codes = [c for c in CAUSE_CODES if c in s[ms[0]]["by_fault"]]
+    ms = _methods(s, keys)
+    codes = [c for c in CAUSE_CODES if c in s[ms[0][1]]["by_fault"]]
     fig = _fig()
     ax = fig.add_subplot(111)
     w = 0.34
-    if "F5" in codes:
-        i5 = codes.index("F5")
-        ax.axvspan(i5 - 0.5, i5 + 0.5, color="#f1f0ec", zorder=0)
-        ax.text(i5, 1.13, "dev에 없던 유형", ha="center", fontsize=12, color=INK2)
+    for code in new_codes:
+        if code in codes:
+            i5 = codes.index(code)
+            ax.axvspan(i5 - 0.5, i5 + 0.5, color="#f1f0ec", zorder=0)
+            ax.text(i5, 1.13, "개발 중 없던 유형", ha="center", fontsize=12, color=INK2)
     for i, c in enumerate(codes):
-        for j, m in enumerate(ms):
+        for j, (role, m) in enumerate(ms):
             x = i + (j - (len(ms) - 1) / 2) * (w + 0.02)
-            _bar(ax, x, s[m]["by_fault"][c]["hit3_strict"], METHOD_COLOR[m], w,
-                 METHOD_LABEL[m] if i == 0 else None)
+            _bar(ax, x, s[m]["by_fault"][c]["hit3_strict"], METHOD_COLOR[role], w,
+                 METHOD_LABEL[role] if i == 0 else None)
     ax.set_xticks(range(len(codes)), [FAULT_LABEL[c] for c in codes])
     ax.set_xlim(-0.5, len(codes) - 0.5)
     ax.set_ylim(0, 1.2)
@@ -172,27 +179,27 @@ def fig3_by_fault(summary: dict, set_name: str, out: Path) -> Path:
 
 
 # ---------------------------------------------------------------- fig4
-def fig4_calibration(summary: dict, set_name: str, out: Path) -> Path:
+def fig4_calibration(summary: dict, set_name: str, out: Path, keys: dict | None = None) -> Path:
     s = summary[set_name]
-    ms = _methods(s)
+    ms = _methods(s, keys)
     fig = _fig()
     ax = fig.add_subplot(111)
     ax.plot([0, 1], [0, 1], ls="--", color=INK2, lw=1.2, label="완전 보정 (신뢰도 = 적중률)")
     markers = {"agent": "o", "baseline": "s"}
-    for m in ms:
+    for role, m in ms:
         pts = [b for b in s[m]["calibration"] if b["n"] and b["mean_conf"] is not None]
         x = [b["mean_conf"] for b in pts]
         y = [b["value"] for b in pts]
         lo = [b["value"] - b["ci95"][0] for b in pts]
         hi = [b["ci95"][1] - b["value"] for b in pts]
-        ax.errorbar(x, y, yerr=[lo, hi], fmt=markers[m] + "-", color=METHOD_COLOR[m], ms=10, lw=2,
-                    capsize=5, label=METHOD_LABEL[m], markeredgecolor=SURFACE, markeredgewidth=2)
+        ax.errorbar(x, y, yerr=[lo, hi], fmt=markers[role] + "-", color=METHOD_COLOR[role], ms=10, lw=2,
+                    capsize=5, label=METHOD_LABEL[role], markeredgecolor=SURFACE, markeredgewidth=2)
         for b in pts:
             ax.annotate(f"n={b['n']}", (b["mean_conf"], b["value"]), textcoords="offset points",
                         xytext=(10, -14), fontsize=11, color=INK2)
     ax.set_xlim(0, 1.05)
     ax.set_ylim(0, 1.05)
-    edges = [b["bin"] for b in s[ms[0]]["calibration"]]
+    edges = [b["bin"] for b in s[ms[0][1]]["calibration"]]
     ax.set_xlabel(f"1순위 가설 신뢰도 (구간 {len(edges)}개의 평균, 구간 폭 {edges[0][1] - edges[0][0]:.1f})")
     ax.set_ylabel("실제 Hit@1 (엄격, 95% 신뢰구간)")
     ax.set_title(f"{set_name} 세트 신뢰도 보정 곡선 (원인 시나리오)")
@@ -201,8 +208,8 @@ def fig4_calibration(summary: dict, set_name: str, out: Path) -> Path:
 
 
 # ---------------------------------------------------------------- fig5
-def fig5_repeatability(summary: dict, set_name: str, out: Path) -> Path:
-    r = summary[set_name]["agent"]["repeatability"]
+def fig5_repeatability(summary: dict, set_name: str, out: Path, agent_key: str = "agent") -> Path:
+    r = summary[set_name][agent_key]["repeatability"]
     fig = _fig(16, 6)
     ax = fig.add_subplot(111)
     lo, hi = _err(r)
@@ -234,7 +241,8 @@ def _hyp_members(h: dict, hist: pd.DataFrame) -> pd.Series:
     return hs.assign(inside=m.to_numpy())
 
 
-def fig6_case_timeline(scenario_dir: Path, run_record: Path, per: pd.DataFrame, out: Path) -> Path:
+def fig6_case_timeline(scenario_dir: Path, run_record: Path, per: pd.DataFrame, out: Path,
+                       agent_key: str = "agent") -> Path:
     rec = json.loads(run_record.read_text(encoding="utf-8"))
     gt = load_ground_truth(scenario_dir)
     alert = json.loads((scenario_dir / "alert.json").read_text(encoding="utf-8"))
@@ -244,7 +252,7 @@ def fig6_case_timeline(scenario_dir: Path, run_record: Path, per: pd.DataFrame, 
     hs = _hyp_members(hyp, hist).merge(wafers[["wafer_id", "yield"]], on="wafer_id")
     hs["day"] = hs["track_in_ts"].dt.floor("D")
     g = hs.groupby(["day", "inside"])["yield"].mean().unstack()
-    row = per[(per["scenario_id"] == rec["scenario_id"]) & (per["method"] == "agent")].iloc[0]
+    row = per[(per["scenario_id"] == rec["scenario_id"]) & (per["method"] == agent_key)].iloc[0]
 
     fig = _fig()
     ax = fig.add_subplot(111)
@@ -320,4 +328,82 @@ def fig7_architecture(out: Path) -> Path:
             fontsize=16)
     ax.text(0.4, 0.3, "역할: 코드 = 데이터 생성·통계 검정·채점 / LLM = 가설 정리·추가 확인 계획·보고서 / 사람 = 최종 조치 승인",
             fontsize=12, color=INK2)
+    return _save(fig, out)
+
+
+# ---------------------------------------------------------------- fig8: 1차 대 2차
+ROUNDS = (("1차 (v1, test1)", "test", {"agent": "agent", "baseline": "baseline"}),
+          ("2차 (v2, test2)", "test2", {"agent": "agent_v2", "baseline": "baseline_v2"}))
+
+
+def _rate_panel(ax, summary: dict, key: str, title: str, chance: bool = False) -> None:
+    w = 0.34
+    for i, (label, st, keys) in enumerate(ROUNDS):
+        s = summary.get(st, {})
+        for j, role in enumerate(("agent", "baseline")):
+            m = keys[role]
+            if m not in s:
+                continue
+            x = i + (j - 0.5) * (w + 0.02)
+            _bar(ax, x, s[m][key], METHOD_COLOR[role], w, METHOD_LABEL[role] if i == 0 else None)
+        if chance and "chance" in s:
+            c = s["chance"]["hit3_strict"]
+            ax.plot([i - 0.42, i + 0.42], [c, c], ls="--", color=INK, lw=1.3,
+                    label="우연 수준" if i == 0 else None)
+    ax.set_xticks(range(len(ROUNDS)), [r[0] for r in ROUNDS])
+    ax.set_ylim(0, 1.25)
+    ax.set_title(title, fontsize=14)
+    ax.legend(loc="upper left", fontsize=10, ncol=3)
+
+
+def fig8_v1_v2(summary: dict, out: Path) -> Path:
+    fig = _fig(16, 11)
+    axes = fig.subplots(2, 2, gridspec_kw={"hspace": 0.38, "wspace": 0.18})
+    _rate_panel(axes[0, 0], summary, "hit3_strict", "Hit@3 (엄격, 원인 시나리오)", chance=True)
+    _rate_panel(axes[0, 1], summary, "false_alarm", "오경보율 (원인 없는 시나리오, 낮을수록 좋음)")
+
+    ax = axes[1, 0]
+    ax.plot([0, 1], [0, 1], ls="--", color=INK2, lw=1.2, label="완전 보정")
+    for (label, st, keys), color, marker in zip(ROUNDS, (V1_GRAY, METHOD_COLOR["agent"]), ("s", "o")):
+        a = summary.get(st, {}).get(keys["agent"])
+        if not a:
+            continue
+        pts = [b for b in a["calibration"] if b["n"] and b["mean_conf"] is not None]
+        ax.errorbar([b["mean_conf"] for b in pts], [b["value"] for b in pts],
+                    yerr=[[b["value"] - b["ci95"][0] for b in pts], [b["ci95"][1] - b["value"] for b in pts]],
+                    fmt=marker + "-", color=color, ms=9, lw=2, capsize=4, label=f"에이전트 {label}",
+                    markeredgecolor=SURFACE, markeredgewidth=2)
+        for b in pts:
+            ax.annotate(f"n={b['n']}", (b["mean_conf"], b["value"]), textcoords="offset points",
+                        xytext=(8, 8 if b["value"] < 0.1 else -12), fontsize=10, color=INK2)
+    ax.set_xlim(0, 1.05)
+    ax.set_ylim(0, 1.05)
+    ax.set_xlabel("1순위 가설 신뢰도 (구간 평균)")
+    ax.set_ylabel("실제 Hit@1 (엄격)")
+    ax.set_title("신뢰도 보정 (에이전트)", fontsize=14)
+    ax.legend(loc="upper left", fontsize=10)
+
+    ax = axes[1, 1]
+    w = 0.38
+    for j, ((label, st, keys), color) in enumerate(zip(ROUNDS, (V1_GRAY, METHOD_COLOR["agent"]))):
+        a = summary.get(st, {}).get(keys["agent"])
+        if not a:
+            continue
+        for i, c in enumerate(CAUSE_CODES):
+            e = a["by_fault"].get(c)
+            if not e or "hit3_strict" not in e:
+                continue
+            x = i + (j - 0.5) * (w + 0.02)
+            r = e["hit3_strict"]
+            lo, hi = _err(r)
+            ax.bar(x, r["value"], width=w, color=color, edgecolor=SURFACE, linewidth=2,
+                   label=f"에이전트 {label}" if i == 0 else None)
+            ax.errorbar(x, r["value"], yerr=[[lo], [hi]], fmt="none", ecolor=INK2, elinewidth=1.2, capsize=3)
+            ax.text(x, r["ci95"][1] + 0.02, f"{r['k']}/{r['n']}", ha="center", fontsize=9)
+    ax.set_xticks(range(len(CAUSE_CODES)), CAUSE_CODES)
+    ax.set_ylim(0, 1.25)
+    ax.set_title("원인 유형별 Hit@3 (엄격, 에이전트) — F6는 2차에만", fontsize=14)
+    ax.legend(loc="upper left", fontsize=10, ncol=2)
+    fig.suptitle("1차와 2차 비교: 서로 다른 시험 세트(test1·test2), 막대 위는 k/n과 비율, 오차 막대는 95% 신뢰구간",
+                 fontsize=15)
     return _save(fig, out)

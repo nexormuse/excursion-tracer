@@ -43,19 +43,25 @@
   img { max-width: 100%; height: auto; background: #fcfcfb; border-radius: 4px; }
   footer { max-width: 1060px; margin: 0 auto 32px; padding: 0 16px; color: var(--ink2); font-size: 13px; }
   .err { color: #cf222e; }
+  .lead { font-size: 18px; margin: 4px 0 18px; }
+  .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; margin: 12px 0 8px; }
+  .kpi { border: 1px solid var(--line); border-radius: 6px; padding: 12px 14px; }
+  .kpi .t { color: var(--ink2); font-size: 13px; }
+  .kpi .v { font-size: 22px; font-weight: 600; margin-top: 2px; }
+  .kpi .s { color: var(--ink2); font-size: 13px; }
+  .links a { margin-right: 14px; }
 </style>
 </head>
 <body>
 <header>
   <div class="bar">
-    <a class="brand" href="#/README.md">excursion-tracer</a>
+    <a class="brand" href="#/">excursion-tracer</a>
     <nav id="nav">
-      <a href="#/README.md">개요와 결과</a>
+      <a href="#/">요약</a>
+      <a href="#/README.md">README</a>
       <a href="#/results/traces/README.md">추적 기록</a>
-      <a href="#/results/traces/scn_5029.md">성공 사례</a>
-      <a href="#/results/traces/scn_5002.md">실패 사례</a>
-      <a href="#/results/traces/scn_5003.md">F5 사례</a>
-      <a href="#/results/failure_analysis.md">실패 사례 분석</a>
+      <a href="#/results/failure_analysis_v2.md">실패 분석 (2차)</a>
+      <a href="#/results/failure_analysis.md">실패 분석 (1차)</a>
       <a href="https://github.com/nexormuse/excursion-tracer">GitHub</a>
     </nav>
   </div>
@@ -74,7 +80,105 @@
 
   function current() {
     const h = decodeURIComponent(location.hash.replace(/^#\/?/, ""));
-    return /^[\w./-]+\.md$/.test(h) && !h.includes("..") ? h : "README.md";
+    return /^[\w./-]+\.md$/.test(h) && !h.includes("..") ? h : "";
+  }
+
+  // 첫 화면: 숫자는 모두 results/summary.json에서 읽는다
+  const ROUNDS = [
+    { name: "1차 (v1, test1)", set: "test", agent: "agent", base: "baseline" },
+    { name: "2차 (v2, test2)", set: "test2", agent: "agent_v2", base: "baseline_v2" },
+  ];
+
+  function fmt(r) {
+    if (!r || r.value === null || r.value === undefined) return "-";
+    const ci = r.ci95 ? ` [${r.ci95[0].toFixed(3)}, ${r.ci95[1].toFixed(3)}]` : "";
+    return `${r.k}/${r.n} = ${r.value.toFixed(3)}${ci}`;
+  }
+
+  function el(tag, attrs, children) {
+    const e = document.createElement(tag);
+    Object.entries(attrs || {}).forEach(([k, v]) => (k === "text" ? (e.textContent = v) : e.setAttribute(k, v)));
+    (children || []).forEach(c => e.appendChild(typeof c === "string" ? document.createTextNode(c) : c));
+    return e;
+  }
+
+  async function showHome() {
+    markNav("");
+    document.title = "excursion-tracer";
+    const [summary, traces] = await Promise.all([
+      fetch("results/summary.json", { cache: "no-store" }).then(r => r.json()),
+      fetch("results/traces/index.json", { cache: "no-store" }).then(r => (r.ok ? r.json() : null)).catch(() => null),
+    ]);
+    const nodes = [];
+    nodes.push(el("h1", { text: "excursion-tracer" }));
+    nodes.push(el("p", { class: "lead", text:
+      "반도체 팹에서 수율 이상 알림이 떴을 때 원인 설비·챔버·레시피를 역추적하는 LLM 에이전트와, " +
+      "원인을 심어 둔 가상 팹 시나리오로 그 판단을 채점하는 평가 환경입니다." }));
+    nodes.push(el("img", { src: "results/figures/fig7_architecture.png", alt: "구조도" }));
+
+    nodes.push(el("h2", { text: "1차·2차 핵심 수치" }));
+    const cards = el("div", { class: "kpis" });
+    for (const r of ROUNDS) {
+      const s = summary[r.set];
+      if (!s || !s[r.agent]) continue;
+      const a = s[r.agent], b = s[r.base] || {};
+      const rep = a.repeatability ? fmt(a.repeatability) : "-";
+      cards.appendChild(el("div", { class: "kpi" }, [
+        el("div", { class: "t", text: `${r.name} · 에이전트 Hit@3 (엄격)` }),
+        el("div", { class: "v", text: a.hit3_strict.value.toFixed(3) }),
+        el("div", { class: "s", text: `${fmt(a.hit3_strict)} · 기준선 ${fmt(b.hit3_strict)}` }),
+      ]));
+      cards.appendChild(el("div", { class: "kpi" }, [
+        el("div", { class: "t", text: `${r.name} · 에이전트 오경보율` }),
+        el("div", { class: "v", text: a.false_alarm.value.toFixed(3) }),
+        el("div", { class: "s", text: `${fmt(a.false_alarm)} · 기준선 ${fmt(b.false_alarm)} · 반복성 ${rep}` }),
+      ]));
+    }
+    nodes.push(cards);
+    const t2 = summary.test2;
+    const tbl = el("table", {}, [el("tr", {}, ["지표", ...ROUNDS.flatMap(r => [`${r.name} 에이전트`, `${r.name} 기준선`])]
+      .map(x => (typeof x === "string" ? el("th", { text: x }) : x)))]);
+    const rows = [["Hit@1 (엄격)", "hit1_strict"], ["Hit@3 (엄격)", "hit3_strict"], ["Hit@3 (느슨)", "hit3_loose"],
+                  ["오경보율", "false_alarm"], ["미탐율", "miss_rate"], ["F4 두 원인 모두 (엄격)", "f4_both_hit3_strict"]];
+    for (const [label, key] of rows) {
+      const tr = el("tr", {}, [el("td", { text: label })]);
+      for (const r of ROUNDS) {
+        const s = summary[r.set] || {};
+        tr.appendChild(el("td", { text: fmt((s[r.agent] || {})[key]) }));
+        tr.appendChild(el("td", { text: fmt((s[r.base] || {})[key]) }));
+      }
+      tbl.appendChild(tr);
+    }
+    nodes.push(tbl);
+    const mc = t2 && t2.compare && t2.compare.mcnemar_pair ? t2.compare[t2.compare.mcnemar_pair].hit3_strict_mcnemar : null;
+    if (mc) nodes.push(el("p", { text: `2차 McNemar (Hit@3 엄격, ${t2.compare.mcnemar_pair}): 둘 다 적중 ${mc.both}, ` +
+      `앞 방법만 ${mc.only_a}, 뒤 방법만 ${mc.only_b}, 둘 다 실패 ${mc.neither}, p = ${mc.p.toFixed(3)}` }));
+    nodes.push(el("p", { class: "s", text: "1차와 2차는 서로 다른 시험 세트다. 2차 시험 세트(test2)는 2차 프롬프트를 고정한 뒤 새 seed로 만들었고, " +
+      "개발 중 없던 원인 유형 F6를 넣었다. 비율 옆 괄호는 95% Wilson 신뢰구간." }));
+    nodes.push(el("img", { src: "results/figures/fig8_v1_v2.png", alt: "1차와 2차 비교" }));
+
+    if (traces && traces.selection) {
+      nodes.push(el("h2", { text: "대표 추적" }));
+      const key = traces.selection.changed ? "changed" : "success";
+      const sid = traces.selection[key];
+      nodes.push(el("p", {}, [`${traces.labels[key]}: `, el("a", { href: `#/results/traces/${sid}.md`, text: sid }),
+        " (알림 → 근거 → 잠정 가설 → 확인 → 최종 보고서 → 정답 공개)"]));
+      const ul = el("ul");
+      Object.entries(traces.selection).forEach(([k, v]) => {
+        if (v) ul.appendChild(el("li", {}, [`${traces.labels[k]}: `, el("a", { href: `#/results/traces/${v}.md`, text: v })]));
+      });
+      nodes.push(ul);
+    }
+    nodes.push(el("h2", { text: "링크" }));
+    nodes.push(el("p", { class: "links" }, [
+      el("a", { href: "#/README.md", text: "README (구조·재현·한계)" }),
+      el("a", { href: "#/results/traces/README.md", text: "추적 기록 목록" }),
+      el("a", { href: "#/results/failure_analysis_v2.md", text: "실패 분석 (2차)" }),
+      el("a", { href: "#/results/failure_analysis.md", text: "실패 분석 (1차)" }),
+      el("a", { href: "https://github.com/nexormuse/excursion-tracer", text: "GitHub" }),
+    ]));
+    main.replaceChildren(...nodes);
+    window.scrollTo(0, 0);
   }
 
   function dirOf(path) {
@@ -116,6 +220,12 @@
 
   async function show() {
     const path = current();
+    if (!path) {
+      try { await showHome(); } catch (e) {
+        main.textContent = "요약을 불러오지 못했습니다: " + e.message;
+      }
+      return;
+    }
     markNav(path);
     try {
       const res = await fetch(path, { cache: "no-store" });

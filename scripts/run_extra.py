@@ -6,7 +6,7 @@
 반복성 표본: 원인 유형별 개수 비율대로 eval.repeat_sample개를 seed 고정으로 뽑는다.
 쇼케이스: 성공 1건(에이전트 Hit@1 엄격 적중, 기준선 Hit@3 엄격 실패인 것 중 번호가 가장 작은 것,
 없으면 에이전트 Hit@1 엄격 적중 중 가장 작은 것), 실패 1건(원인 시나리오에서 에이전트 Hit@3 느슨 실패
-중 가장 작은 것), F5 1건(F5 중 번호가 가장 작은 것, 앞의 두 건과 겹치면 다음 것).
+중 가장 작은 것), 새 유형 1건(test는 F5, test2는 F6 중 번호가 가장 작은 것, 앞의 두 건과 겹치면 다음 것).
 선정 결과는 results/repeat_sample.json, results/showcase_selection.json에 저장한다.
 """
 
@@ -46,7 +46,8 @@ def stratified_sample(codes: dict[str, str], n: int, seed: int) -> list[str]:
     return sorted(out)
 
 
-def pick_showcase(per: pd.DataFrame, set_name: str, agent: str, baseline: str = "baseline") -> dict:
+def pick_showcase(per: pd.DataFrame, set_name: str, agent: str, baseline: str = "baseline",
+                  new_code: str = "F5") -> dict:
     p = per[per["set"] == set_name]
     a = p[p["method"] == agent].set_index("scenario_id")
     b = p[p["method"] == baseline].set_index("scenario_id")
@@ -57,8 +58,8 @@ def pick_showcase(per: pd.DataFrame, set_name: str, agent: str, baseline: str = 
     fail = [s for s in cause.index if not cause.loc[s, "hit3_loose"]]
     chosen = {"success": sorted(win)[0] if win else None,
               "failure": sorted(fail)[0] if fail else None}
-    f5 = [s for s in sorted(a.index) if a.loc[s, "fault_code"] == "F5" and s not in chosen.values()]
-    chosen["f5"] = f5[0] if f5 else None
+    new = [s for s in sorted(a.index) if a.loc[s, "fault_code"] == new_code and s not in chosen.values()]
+    chosen["f5" if new_code == "F5" else "new"] = new[0] if new else None
     return chosen
 
 
@@ -69,6 +70,7 @@ def main(argv=None) -> int:
     ap.add_argument("--version", default="v1", choices=["v1", "v2"])
     ap.add_argument("--agent-method", default=None, help="per_scenario.csv의 에이전트 방법 이름")
     ap.add_argument("--baseline-method", default=None, help="per_scenario.csv의 기준선 방법 이름")
+    ap.add_argument("--sample-n", type=int, default=None, help="반복성 표본 수 (기본은 eval.repeat_sample)")
     ap.add_argument("--data", type=Path, default=PROJECT_ROOT / "data")
     ap.add_argument("--runs", type=Path, default=RUNS_DIR)
     args = ap.parse_args(argv)
@@ -87,7 +89,8 @@ def main(argv=None) -> int:
     try:
         if args.what == "repeat":
             codes = {k: load_ground_truth(d)["fault_code"] for k, d in dirs.items()}
-            sample = stratified_sample(codes, cfg.eval.repeat_sample, cfg.seed_base[args.set])
+            n = args.sample_n or cfg.eval.repeat_sample
+            sample = stratified_sample(codes, n, cfg.seed_for(args.set, 0))
             name = "repeat_sample.json" if args.version == "v1" else f"repeat_sample_{args.set}.json"
             (RESULTS / name).write_text(json.dumps(
                 {"set": args.set, "base_run": base_run, "scenarios": sample}, indent=2) + "\n")
@@ -98,7 +101,8 @@ def main(argv=None) -> int:
                 runner(client, cfg, [dirs[s] for s in sample], rid, args.runs)
         else:
             per = pd.read_csv(RESULTS / "per_scenario.csv")
-            chosen = pick_showcase(per, args.set, agent_method, baseline_method)
+            chosen = pick_showcase(per, args.set, agent_method, baseline_method,
+                                   new_code="F6" if args.set == "test2" else "F5")
             name = "showcase_selection.json" if args.version == "v1" else f"showcase_selection_{args.set}.json"
             (RESULTS / name).write_text(json.dumps(
                 {"set": args.set, "base_run": base_run, "selection": chosen,
