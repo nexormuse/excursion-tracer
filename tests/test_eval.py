@@ -62,6 +62,8 @@ def GT(code, *faults):
     (H(kind="tool", step="S30", tool="S30-T1"), F3, (False, True)),
     (H(kind="tool", step="S31", tool="S31-T2"), F3, (False, False)),
     (H(kind="recipe", step="S07", recipe="S07-R1"), F5, (True, True)),
+    (H(kind="chamber", tool="S12-T3", chamber="S12-T3-C2"), {**F1, "type": "F6"}, (True, True)),
+    (H(kind="tool", tool="S12-T3"), {**F1, "type": "F6"}, (False, True)),
     (H(kind="tool", step="S07", tool="S07-T1"), F5, (False, True)),
 ])
 def test_match_rules(h, fault, expected):
@@ -219,7 +221,8 @@ def test_evaluate_end_to_end(cfg, fixture_set, tmp_path):
         gt = load_ground_truth(d)
         hyps = []
         for i, f in enumerate(gt["faults"]):
-            kind = {"F1": "chamber", "F2": "tool_recipe", "F3": "tool", "F5": "recipe"}[f["type"]]
+            kind = {"F1": "chamber", "F2": "tool_recipe", "F3": "tool", "F5": "recipe",
+                    "F6": "chamber"}[f["type"]]
             hyps.append(H(i + 1, kind=kind, step=f["step_id"], tool=f["tool_id"] or "",
                           chamber=f["chamber_id"] or "", recipe=f["recipe_id"] or "",
                           onset=f["onset_ts"]))

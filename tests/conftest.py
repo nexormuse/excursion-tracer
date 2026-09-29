@@ -32,7 +32,10 @@ FIXTURE_PLANS = [
     ("F4", "large", "low"),
     ("F5", "small", "low"),
     ("F5", "medium", "high"),
+    ("F6", "large", "low"),
+    ("F6", "medium", "high"),
 ]
+SET_OF = {"F5": "test", "F6": "test2"}
 
 
 @dataclass
@@ -59,7 +62,7 @@ def fixture_set(cfg: Config, tmp_path_factory) -> Fixture:
     for i, (code, eff, stick) in enumerate(FIXTURE_PLANS):
         seed = FIXTURE_FAB_SEED + 1 + i
         plan = ScenarioPlan(f"scn_{seed}", seed, code, eff, stick)
-        set_name = "test" if code == "F5" else "dev"
+        set_name = SET_OF.get(code, "dev")
         results.append(
             generate_scenario(cfg, fab, set_name, plan, root / plan.scenario_id,
                               created_at="2026-01-01T00:00:00")

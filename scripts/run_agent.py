@@ -47,7 +47,8 @@ def estimate(cfg, tracker: UsageTracker, runs_dir: Path) -> None:
 
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    ap.add_argument("--set", choices=["dev", "test"])
+    ap.add_argument("--set", choices=["dev", "test", "test2"])
+    ap.add_argument("--version", default="v1", choices=["v1", "v2"])
     ap.add_argument("--limit", type=int, default=None)
     ap.add_argument("--run-id", default=None)
     ap.add_argument("--data", type=Path, default=PROJECT_ROOT / "data")
@@ -65,13 +66,16 @@ def main(argv=None) -> int:
 
     from excursion_tracer.llm.gemini_client import GeminiClient
 
+    from excursion_tracer.agent.loop_v2 import find_run_id_v2, run_set_v2
+
     client = GeminiClient(cfg.llm.model, tracker)
     client.check_model()
-    run_id = args.run_id or find_run_id(cfg.llm.model, args.runs)
+    finder, runner = (find_run_id, run_set) if args.version == "v1" else (find_run_id_v2, run_set_v2)
+    run_id = args.run_id or finder(cfg.llm.model, args.runs)
     dirs = sorted(p for p in (args.data / args.set).iterdir() if (p / "meta.json").is_file())
-    print(f"run_id {run_id}, 모델 {cfg.llm.model}, 시나리오 {len(dirs)}개 (limit {args.limit})")
+    print(f"run_id {run_id}, 에이전트 {args.version}, 모델 {cfg.llm.model}, 시나리오 {len(dirs)}개 (limit {args.limit})")
     try:
-        recs = run_set(client, cfg, dirs, run_id, args.runs, limit=args.limit)
+        recs = runner(client, cfg, dirs, run_id, args.runs, limit=args.limit)
     except QuotaExhausted as e:
         print(str(e), file=sys.stderr)
         return 3
@@ -80,6 +84,8 @@ def main(argv=None) -> int:
         sec = [r["seconds"] for r in recs]
         print(f"\n{len(recs)}개 실행: 형식 실패 {sum(r['invalid'] for r in recs)}, "
               f"2회차 실패 {sum(r['round2_failed'] for r in recs)}, "
+              f"ID 정규화 {sum(len(r.get('id_normalized') or []) for r in recs)}건, "
+              f"ID 재요청 {sum(r.get('id_retry') is not None for r in recs)}, "
               f"추가 확인 요청 {sum(r['needs_checks'] for r in recs)}, "
               f"시나리오당 요청 평균 {sum(req) / len(req):.2f} (최대 {max(req)}), "
               f"시간 평균 {sum(sec) / len(sec):.1f}초 (최대 {max(sec):.1f}초)")

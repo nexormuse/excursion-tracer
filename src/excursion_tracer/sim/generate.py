@@ -21,6 +21,7 @@ import pandas as pd
 from excursion_tracer.config import Config
 from excursion_tracer.sim.fab import Fab, build_fab
 from excursion_tracer.sim.faults import (
+    ALLOWED_SETS,
     FAULT_CODES,
     NO_CAUSE_CODES,
     SINGLE_CODES,
@@ -32,6 +33,7 @@ from excursion_tracer.sim.faults import (
     pick_f2,
     pick_f3,
     pick_f5_step,
+    pick_f6,
 )
 from excursion_tracer.sim.monitor import Alert, evaluate_alert
 from excursion_tracer.sim.routing import (
@@ -91,8 +93,9 @@ class ScenarioResult:
 def check_set_allows(set_name: str, fault_code: str) -> None:
     if fault_code not in FAULT_CODES:
         raise ValueError(f"모르는 원인 유형: {fault_code}")
-    if fault_code in TEST_ONLY_CODES and set_name != "test":
-        raise ValueError(f"{fault_code}는 test 세트에서만 생성한다 (요청한 세트: {set_name})")
+    if fault_code in TEST_ONLY_CODES and set_name not in ALLOWED_SETS[fault_code]:
+        raise ValueError(f"{fault_code}는 {', '.join(ALLOWED_SETS[fault_code])} 세트에서만 생성한다 "
+                         f"(요청한 세트: {set_name})")
 
 
 def _scaled_mix(mix: dict[str, int], n: int) -> dict[str, int]:
@@ -117,12 +120,12 @@ def _balanced(options: list, n: int, rng: np.random.Generator) -> list:
 
 def plan_set(cfg: Config, set_name: str, n: int | None = None) -> list[ScenarioPlan]:
     """세트의 시나리오 목록. 원인 유형과 난이도 칸을 고르게 배분하고 번호 순서를 섞는다."""
-    spec = getattr(cfg.sets, set_name)
+    spec = cfg.set_spec(set_name)
     n = spec.n if n is None else n
     mix = _scaled_mix(spec.mix, n)
     for code in mix:
         check_set_allows(set_name, code)
-    rng = np.random.default_rng(np.random.SeedSequence([cfg.seed_base[set_name], 1]))
+    rng = np.random.default_rng(np.random.SeedSequence([cfg.seed_for(set_name, 0), 1]))
     cells = [(e, s) for e in EFFECTS for s in STICKINESS]
     filled = Counter({c: 0 for c in cells})
     items: list[tuple[str, str | None, str]] = []
@@ -170,6 +173,8 @@ def simulate(cfg: Config, fab: Fab, plan: ScenarioPlan, attempt: int) -> Attempt
         events.append(change)
         faults.append(f5_from_change(change, delta))
         n_changes -= 1
+    elif code == "F6":
+        faults.append(pick_f6(cfg, fab, r_fault, delta, set(), flow))
     elif code in SINGLE_CODES or code == "F4":
         types = [code] if code != "F4" else sorted(r_fault.choice(SINGLE_CODES, 2, replace=False))
         used: set[int] = set()
@@ -244,6 +249,7 @@ def _alert_json(cfg: Config, att: Attempt, products: list[str]) -> dict:
 
 
 def _fault_json(fab: Fab, f: Fault) -> dict:
+    extra = {"windows": [[_iso(a), _iso(b)] for a, b in f.windows]} if f.windows else {}
     return {
         "type": f.type,
         "step_id": fab.steps[f.step_index].step_id,
@@ -252,6 +258,7 @@ def _fault_json(fab: Fab, f: Fault) -> dict:
         "recipe_id": f.recipe_id,
         "onset_ts": _iso(f.onset_h),
         "delta": f.delta,
+        **extra,
     }
 
 
@@ -378,7 +385,7 @@ def generate_scenario(
 
 
 def build_set_fab(cfg: Config, set_name: str) -> Fab:
-    return build_fab(cfg, cfg.seed_base[set_name])
+    return build_fab(cfg, cfg.seed_for(set_name, 0))
 
 
 def generate_set(

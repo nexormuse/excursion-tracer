@@ -18,6 +18,12 @@ def fault_weights(history: pd.DataFrame, fault: dict, observe_end: pd.Timestamp)
     kind = fault["type"]
     if kind == "F1":
         hit &= h["chamber_id"] == fault["chamber_id"]
+    elif kind == "F6":
+        hit &= h["chamber_id"] == fault["chamber_id"]
+        in_win = pd.Series(False, index=h.index)
+        for a, b in fault["windows"]:
+            in_win |= (h["track_in_ts"] >= pd.Timestamp(a)) & (h["track_in_ts"] < pd.Timestamp(b))
+        hit &= in_win
     elif kind == "F2":
         hit &= (h["tool_id"] == fault["tool_id"]) & (h["recipe_id"] == fault["recipe_id"])
     elif kind == "F3":

@@ -3,8 +3,8 @@
     python scripts/gen_scenarios.py --set dev
     python scripts/gen_scenarios.py --set test --n 80
 
-test 세트는 에이전트 프롬프트를 고정한 뒤에만 만든다. docs/DECISIONS.md의
-"고정 시각" 기록이 비어 있으면 생성을 거부한다.
+test 세트는 에이전트 프롬프트를 고정한 뒤에만, test2 세트는 v2 프롬프트를 고정한 뒤에만 만든다.
+docs/DECISIONS.md의 "고정 시각"("v2 고정 시각") 기록이 비어 있으면 생성을 거부한다.
 """
 
 from __future__ import annotations
@@ -22,10 +22,11 @@ from excursion_tracer.sim.generate import EFFECTS, STICKINESS, generate_set
 DECISIONS = PROJECT_ROOT / "docs" / "DECISIONS.md"
 
 
-def prompt_frozen() -> bool:
+def prompt_frozen(set_name: str = "test") -> bool:
     if not DECISIONS.is_file():
         return False
-    m = re.search(r"^- 고정 시각:[ \t]*(\S.*)$", DECISIONS.read_text(encoding="utf-8"), re.M)
+    label = "v2 고정 시각" if set_name == "test2" else "고정 시각"
+    m = re.search(rf"^- {label}:[ \t]*(\S.*)$", DECISIONS.read_text(encoding="utf-8"), re.M)
     return bool(m)
 
 
@@ -64,15 +65,16 @@ def print_summary(results, seconds: float) -> None:
 
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    ap.add_argument("--set", required=True, choices=["dev", "test"])
+    ap.add_argument("--set", required=True, choices=["dev", "test", "test2"])
     ap.add_argument("--n", type=int, default=None, help="개수 (구성 비율 유지, 기본은 설정값)")
     ap.add_argument("--out", type=Path, default=PROJECT_ROOT / "data")
     ap.add_argument("--skip-freeze-check", action="store_true",
                     help="test 세트 생성 전 프롬프트 고정 기록 확인을 건너뛴다")
     args = ap.parse_args(argv)
 
-    if args.set == "test" and not args.skip_freeze_check and not prompt_frozen():
-        print("test 세트는 프롬프트 고정 이후에만 생성한다: docs/DECISIONS.md의 '고정 시각'이 비어 있다.",
+    if args.set in ("test", "test2") and not args.skip_freeze_check and not prompt_frozen(args.set):
+        label = "v2 고정 시각" if args.set == "test2" else "고정 시각"
+        print(f"{args.set} 세트는 프롬프트 고정 이후에만 생성한다: docs/DECISIONS.md의 '{label}'이 비어 있다.",
               file=sys.stderr)
         return 2
 

@@ -122,7 +122,7 @@ def test_output_files_and_schema(fixture_set):
 
 
 def test_ground_truth_matches_fault_code(fixture_set):
-    expected_n = {"F0a": 0, "F0b": 0, "F1": 1, "F2": 1, "F3": 1, "F4": 2, "F5": 1}
+    expected_n = {"F0a": 0, "F0b": 0, "F1": 1, "F2": 1, "F3": 1, "F4": 2, "F5": 1, "F6": 1}
     for d in fixture_set.dirs():
         gt = load_ground_truth(d)
         faults = gt["faults"]
@@ -182,7 +182,7 @@ def test_injected_effect_is_exact(fixture_set, monkeypatch):
             continue
         waf = pd.read_parquet(r.path / "wafers.parquet")
         hist = pd.read_parquet(r.path / "history.parquet")
-        set_name = "test" if r.plan.fault_code == "F5" else "dev"
+        set_name = {"F5": "test", "F6": "test2"}.get(r.plan.fault_code, "dev")
         check_set_allows(set_name, r.plan.fault_code)
         with_fault = simulate(cfg, fab, r.plan, r.regen_count)
         with monkeypatch.context() as m:
@@ -238,7 +238,7 @@ FORBIDDEN_WORDS = (
     "drift", "degrad", "anomal", "culprit", "effect", "cell", "difficult", "benign",
     "decoy", "noisy", "planted", "onset", "label", "answer",
 )
-FAULT_CODE_RE = re.compile(r"\bF[0-5][ab]?\b", re.IGNORECASE)
+FAULT_CODE_RE = re.compile(r"\bF[0-9][ab]?\b", re.IGNORECASE)
 
 
 def _strings_in_json(obj):
@@ -426,6 +426,44 @@ def test_test_plan_has_f5_and_scales(cfg):
     assert Counter(p.fault_code for p in plan_set(cfg, "test"))["F5"] == cfg.sets.test.mix["F5"]
     small = Counter(p.fault_code for p in plan_set(cfg, "test", n=80))
     assert sum(small.values()) == 80 and small["F5"] == 12
+
+
+def test_f6_windows_and_onset(fixture_set):
+    lo, hi = fixture_set.cfg.v2.f6.n_windows
+    wlo, whi = fixture_set.cfg.v2.f6.window_hours
+    end = pd.Timestamp("2026-01-01") + pd.Timedelta(days=fixture_set.cfg.flow.observe_end_day)
+    seen = 0
+    for d in fixture_set.dirs():
+        gt = load_ground_truth(d)
+        if gt["fault_code"] != "F6":
+            continue
+        seen += 1
+        f = gt["faults"][0]
+        wins = [(pd.Timestamp(a), pd.Timestamp(b)) for a, b in f["windows"]]
+        assert lo <= len(wins) <= hi
+        assert wins[0][0] == pd.Timestamp(f["onset_ts"])
+        for a, b in wins:
+            assert wlo - 0.01 <= (b - a) / pd.Timedelta(hours=1) <= whi + 0.01
+            assert b < end
+        assert all(wins[i][1] <= wins[i + 1][0] for i in range(len(wins) - 1))
+        assert f["chamber_id"].rsplit("-", 1)[0] == f["tool_id"]
+    assert seen == 2
+
+
+def test_test2_plan(cfg):
+    plans = plan_set(cfg, "test2")
+    assert Counter(p.fault_code for p in plans) == Counter(cfg.test2_set.mix)
+    assert plans[0].scenario_id == "scn_7001" or min(p.seed for p in plans) == cfg.test2_set.seed_base + 1
+    assert [p.seed for p in plans] == [cfg.test2_set.seed_base + i + 1 for i in range(len(plans))]
+
+
+def test_f6_only_in_test2(cfg, tmp_path):
+    for s in ("dev", "test"):
+        with pytest.raises(ValueError):
+            check_set_allows(s, "F6")
+    check_set_allows("test2", "F6")
+    check_set_allows("test2", "F5")
+    assert "F6" not in {p.fault_code for p in plan_set(cfg, "dev") + plan_set(cfg, "test")}
 
 
 def test_f5_is_rejected_outside_test(cfg, tmp_path):

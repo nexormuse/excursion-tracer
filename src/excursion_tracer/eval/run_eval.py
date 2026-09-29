@@ -39,7 +39,8 @@ def load_report(path: Path) -> tuple[Report | None, dict]:
     if isinstance(raw, dict) and "final_report" in raw:
         extra = {k: raw.get(k) for k in ("requests", "input_tokens", "output_tokens",
                                          "seconds", "numcheck_bad", "needs_checks",
-                                         "preliminary_report", "model", "prompt_hash") if k in raw}
+                                         "preliminary_report", "model", "prompt_hash",
+                                         "id_normalized", "id_problems", "id_retry") if k in raw}
         if raw.get("invalid") or raw["final_report"] is None:
             return None, extra
         raw = raw["final_report"]
@@ -52,6 +53,15 @@ def load_report(path: Path) -> tuple[Report | None, dict]:
 def scenario_dirs(data_root: Path, set_name: str) -> list[Path]:
     base = data_root / set_name
     return sorted(p for p in base.iterdir() if (p / "meta.json").is_file())
+
+
+def _id_fields(extra: dict) -> dict:
+    """v2 기록의 ID 검증 결과: 정규화 건수, ID 재요청 여부, 해석 안 된 ID가 남았는지."""
+    if "id_normalized" not in extra:
+        return {"id_normalized_n": None, "id_retry": None, "id_unresolved": None}
+    return {"id_normalized_n": len(extra.get("id_normalized") or []),
+            "id_retry": extra.get("id_retry") is not None,
+            "id_unresolved": bool(extra.get("id_problems"))}
 
 
 def _top_key(rep: Report | None) -> tuple:
@@ -105,6 +115,7 @@ def score_method(cfg: Config, dirs: list[Path], gts: dict, report_dir: Path, met
             "seconds": extra.get("seconds", seconds.get(d.name)),
             **{k: extra.get(k) for k in ("requests", "input_tokens", "output_tokens", "numcheck_bad",
                                          "model", "prompt_hash")},
+            **_id_fields(extra),
         })
     return pd.DataFrame(rows)
 

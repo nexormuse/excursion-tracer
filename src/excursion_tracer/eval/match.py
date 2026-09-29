@@ -6,6 +6,7 @@
 | F3 | 설비 일치 | 같은 단계 |
 | F4 | 두 원인 중 하나 이상이 상위 k개 안에서 엄격 적중 | 하나 이상이 상위 k개 안에서 느슨한 적중 |
 | F5 | 레시피 일치 | 같은 단계 |
+| F6 | 챔버 일치 | 같은 설비 |
 | F0a·F0b | no_equipment_cause, 또는 1순위 신뢰도 < τ | 동일 |
 
 F4는 보조 지표로 두 원인 모두 상위 3개 안에서 엄격 적중했는지(both_hit3_strict)를 따로 본다.
@@ -40,7 +41,7 @@ def match_fault(h: Hypothesis, f: dict) -> tuple[bool, bool]:
     kind = f["type"]
     tool = hyp_tool(h)
     same_step = h.step_id == f["step_id"]
-    if kind == "F1":
+    if kind in ("F1", "F6"):
         strict = bool(h.chamber_id) and h.chamber_id == f["chamber_id"]
         return strict, strict or tool == f["tool_id"]
     if kind == "F2":
@@ -123,7 +124,7 @@ def score(report: Report | None, gt: dict, tau: float, onset_tol_days: float = 1
 
     onset = []
     for f, r in zip(faults, s_ranks):
-        if f["type"] in ("F1", "F5") and r is not None:
+        if f["type"] in ("F1", "F5", "F6") and r is not None:
             onset.append(_onset_ok(top[r - 1], f, onset_tol_days))
     out["onset_ok"] = all(onset) if onset else None
     return out

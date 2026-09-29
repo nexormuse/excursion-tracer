@@ -60,3 +60,10 @@ class Round1(BaseModel):
     report: Report  # 잠정 보고서 (추가 확인이 없으면 최종)
     needs_checks: bool
     checks: list[CheckRequest] = Field(default_factory=list, max_length=3)
+
+
+class Round1V2(BaseModel):
+    """v2 1회차: 잠정 보고서와 반드시 1~3개의 확인 요청."""
+
+    report: Report  # 잠정 보고서
+    checks: list[CheckRequest] = Field(min_length=1, max_length=3)

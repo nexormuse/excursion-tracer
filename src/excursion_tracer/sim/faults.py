@@ -1,4 +1,4 @@
-"""원인 라이브러리 F0a·F0b·F1·F2·F3·F4·F5: 위치·시작 시각을 고르고 수율 효과를 계산한다."""
+"""원인 라이브러리 F0a·F0b·F1·F2·F3·F4·F5·F6: 위치·시작 시각을 고르고 수율 효과를 계산한다."""
 
 from __future__ import annotations
 
@@ -10,9 +10,16 @@ from excursion_tracer.config import Config
 from excursion_tracer.sim.fab import Fab
 from excursion_tracer.sim.routing import HOURS_PER_DAY, Event, Flow
 
-FAULT_CODES = ("F0a", "F0b", "F1", "F2", "F3", "F4", "F5")
+FAULT_CODES = ("F0a", "F0b", "F1", "F2", "F3", "F4", "F5", "F6")
 NO_CAUSE_CODES = ("F0a", "F0b")
-TEST_ONLY_CODES = ("F5",)
+TEST_ONLY_CODES = ("F5", "F6")
+# 시험 세트 전용 유형이 나올 수 있는 세트
+ALLOWED_SETS = {"F5": ("test", "test2"), "F6": ("test2",)}
+# F6 구간을 둘 수 있는 마지막 시각: 관측 종료보다 이만큼 앞 (처리 후 측정까지 걸리는 시간)
+F6_MEASURE_MARGIN_H = 72.0
+F6_SPAN_H = 96.0
+# F6 챔버는 이상 구간 안에 이만큼 이상의 로트를 처리한 챔버 중에서 고른다 (효과가 관측되도록)
+F6_MIN_LOTS = 3
 SINGLE_CODES = ("F1", "F2", "F3")
 
 
@@ -25,6 +32,7 @@ class Fault:
     tool: int | None = None  # 전역 설비 번호
     chamber: int | None = None  # 전역 챔버 번호
     recipe_id: str | None = None
+    windows: list[tuple[float, float]] | None = None  # F6: 이상이 나타나는 (시작, 끝) 시각들
 
 
 def _yield_steps(fab: Fab, **flags) -> list[int]:
@@ -94,6 +102,48 @@ def pick_f3(
     return Fault("F3", s, _onset(cfg, rng), delta, tool=tool)
 
 
+def pick_f6(
+    cfg: Config, fab: Fab, rng: np.random.Generator, delta: float, exclude_steps: set[int],
+    flow: Flow,
+) -> Fault:
+    """간헐적 챔버 이상: 시작 시각 이후 12~24시간짜리 구간 2~3개에서만 한 챔버가 −δ.
+
+    구간을 먼저 정하고, 그 구간 안에 F6_MIN_LOTS개 이상의 로트를 처리한 다챔버 설비의 챔버에서 고른다.
+    """
+    onset = _onset(cfg, rng)
+    f6 = cfg.v2.f6
+    n = int(rng.integers(f6.n_windows[0], f6.n_windows[1] + 1))
+    end_limit = cfg.flow.observe_end_day * HOURS_PER_DAY - F6_MEASURE_MARGIN_H
+    span = min(F6_SPAN_H, end_limit - onset)
+    spacing = span / (n - 1) if n > 1 else 0.0
+    windows = []
+    for k in range(n):
+        start = onset + k * spacing
+        if k > 0:
+            start += float(rng.uniform(-0.1, 0.1) * spacing)
+        dur = float(rng.uniform(f6.window_hours[0], f6.window_hours[1]))
+        windows.append((float(start), float(start + dur)))
+
+    chambers = []
+    for c in range(fab.n_chambers):
+        t = int(fab.chamber_tool[c])
+        s = int(fab.tool_step[t])
+        if fab.tool_n_chambers[t] < 2 or not fab.steps[s].affects_yield or s in exclude_steps:
+            continue
+        t_in = flow.track_in_h[:, s]
+        in_win = np.zeros(len(t_in), dtype=bool)
+        for a, b in windows:
+            in_win |= (t_in >= a) & (t_in < b)
+        if int((in_win & (flow.tool[:, s] == t)).sum()) >= F6_MIN_LOTS:
+            chambers.append(c)
+    if not chambers:
+        raise RuntimeError("F6을 넣을 챔버가 없다")
+    chamber = int(chambers[int(rng.integers(len(chambers)))])
+    tool = int(fab.chamber_tool[chamber])
+    return Fault("F6", int(fab.tool_step[tool]), windows[0][0], delta, tool=tool, chamber=chamber,
+                 windows=windows)
+
+
 def pick_f5_step(fab: Fab, rng: np.random.Generator) -> int:
     steps = _yield_steps(fab, product_specific=False)
     return steps[int(rng.integers(len(steps)))]
@@ -124,4 +174,10 @@ def fault_effect(cfg: Config, fab: Fab, flow: Flow, fault: Fault) -> np.ndarray:
         return np.repeat(lot_eff, W)
     if fault.type == "F5":
         return np.where(after, fault.delta, 0.0)
+    if fault.type == "F6":
+        in_win = np.zeros(L, dtype=bool)
+        for a, b in fault.windows:
+            in_win |= (t_in >= a) & (t_in < b)
+        hit = flow.chamber[:, :, s].reshape(L * W) == fault.chamber
+        return np.where(hit & np.repeat(in_win, W), fault.delta, 0.0)
     raise ValueError(f"효과를 계산할 수 없는 원인 유형: {fault.type}")

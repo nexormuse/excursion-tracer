@@ -70,6 +70,14 @@ def core_metrics(df: pd.DataFrame) -> dict:
     if "seconds" in df and df["seconds"].notna().any():
         s = df["seconds"].dropna()
         out["seconds_per_scenario"] = {"mean": float(s.mean()), "max": float(s.max()), "n": int(len(s))}
+    if "id_normalized_n" in df and df["id_normalized_n"].notna().any():
+        n = df["id_normalized_n"].dropna()
+        out["id_check"] = {
+            "normalized_scenarios": rate(n > 0),
+            "normalized_ids_total": int(n.sum()),
+            "retry": rate(df["id_retry"]),
+            "unresolved_after_retry": rate(df["id_unresolved"]),
+        }
     if "checks_requested" in df and df["checks_requested"].notna().any():
         out["check_effect"] = check_effect(df)
     for col in ("requests", "input_tokens", "output_tokens"):
@@ -136,7 +144,7 @@ def _pool(fab: dict, kind: str) -> list[Hypothesis]:
     pool = []
     for s in fab["steps"]:
         sid = s["step_id"]
-        if kind == "F1":
+        if kind in ("F1", "F6"):
             for t in s["tools"]:
                 if len(t["chambers"]) > 1:
                     pool += [Hypothesis(rank=1, entity_type="chamber", step_id=sid, tool_id=t["tool_id"],
