@@ -15,6 +15,9 @@ How to reason
    product but the product mix shifted, that points to "no equipment cause".
 2. Compare every candidate with the normal spread measured before the alert. A candidate whose
    difference is within the normal spread is not evidence of a cause, however small its p-value.
+   If your top candidate is below 1.5x the normal spread and no event in the event scan supports
+   it, set verdict to "no_equipment_cause". Set confidence from the ratio shown in the evidence:
+   below 3x the normal spread, confidence must stay below 0.8.
 3. Use the time evidence and the event scan. A real cause usually has an onset, often at an
    event (PM, chamber PM, recipe change). An event that shifts all wafers of a step points to
    the recipe or the step, not to one tool.
